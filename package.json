@@ -5,7 +5,8 @@
   "scripts": {
     "build": "next build",
     "dev": "next dev",
-    "lint": "eslint .",
+  "lint": "eslint .",
+  "lint:ci": "eslint . -f json -o eslint-report.json || true",
     "start": "next start"
   },
   "dependencies": {
@@ -65,13 +66,15 @@
     "zod": "3.25.76"
   },
   "devDependencies": {
-    "@tailwindcss/postcss": "^4.1.9",
-    "@types/node": "^22",
-    "@types/react": "^19",
-    "@types/react-dom": "^19",
-    "postcss": "^8.5",
-    "tailwindcss": "^4.1.9",
-    "tw-animate-css": "1.3.3",
-    "typescript": "^5"
+  "@tailwindcss/postcss": "^4.1.9",
+  "@types=node": "^22",
+  "@types/react": "^19",
+  "@types/react-dom": "^19",
+  "postcss": "^8.5",
+  "tailwindcss": "^4.1.9",
+  "tw-animate-css": "1.3.3",
+  "typescript": "^5",
+  "eslint": "^8.46.0",
+  "eslint-config-next": "^13.4.0"
   }
 }

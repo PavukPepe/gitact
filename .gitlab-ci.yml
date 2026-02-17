@@ -1,0 +1,101 @@
+stages:
+  - install
+  - validate
+  - build
+  - analyze
+
+variables:
+  NEXT_TELEMETRY_DISABLED: "1"
+  npm_config_cache: "$CI_PROJECT_DIR/.npm-cache"
+
+cache:
+  key:
+    files:
+      - package-lock.json
+  paths:
+    - .npm-cache/
+    - node_modules/
+    - .next/cache/
+
+.node_base: &node_base
+  image: node:20-alpine
+  before_script:
+    - npm ci --cache .npm-cache --prefer-offline
+
+install_dependencies:
+  <<: *node_base
+  stage: install
+  script:
+    - echo "Dependencies installed successfully"
+
+lint:
+  <<: *node_base
+  stage: validate
+  script:
+    - npm run lint:ci
+  artifacts:
+    name: "eslint-report-$CI_COMMIT_SHORT_SHA"
+    when: always
+    paths:
+      - eslint-report.json
+    expire_in: 1 week
+
+typecheck:
+  <<: *node_base
+  stage: validate
+  script:
+    - npx tsc --noEmit
+
+build:
+  <<: *node_base
+  stage: build
+  script:
+    - npm run build
+  artifacts:
+    name: "next-build-$CI_COMMIT_SHORT_SHA"
+    paths:
+      - .next/
+    exclude:
+      - .next/cache/**
+    expire_in: 3 days
+  environment:
+    name: production
+    url: $DEPLOY_URL
+
+audit:
+  <<: *node_base
+  stage: analyze
+  script:
+    - npm audit --audit-level=high 2>&1 | tee audit-report.txt || true
+    - echo "Audit finished — see artifact audit-report.txt"
+  artifacts:
+    name: "audit-report-$CI_COMMIT_SHORT_SHA"
+    when: always
+    paths:
+      - audit-report.txt
+    expire_in: 1 week
+  allow_failure: true
+
+bundle_size:
+  <<: *node_base
+  stage: analyze
+  needs:
+    - build
+  script:
+    - |
+      echo "=== Next.js bundle size report ===" | tee bundle-report.txt
+      du -sh .next/                             | tee -a bundle-report.txt
+      echo ""                                   | tee -a bundle-report.txt
+      echo "--- Static pages ---"              | tee -a bundle-report.txt
+      du -sh .next/static/     2>/dev/null     | tee -a bundle-report.txt
+      echo ""                                   | tee -a bundle-report.txt
+      echo "--- Chunks (top 10 by size) ---"   | tee -a bundle-report.txt
+      find .next/static/chunks -name "*.js" \
+        -exec du -sh {} \; 2>/dev/null \
+        | sort -rh | head -10                  | tee -a bundle-report.txt
+  artifacts:
+    name: "bundle-size-report-$CI_COMMIT_SHORT_SHA"
+    when: always
+    paths:
+      - bundle-report.txt
+    expire_in: 1 week

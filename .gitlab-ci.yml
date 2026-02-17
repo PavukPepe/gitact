@@ -19,6 +19,8 @@ cache:
 
 .node_base: &node_base
   image: node:20-alpine
+  tags:
+    - pipe
   before_script:
     - npm ci --cache .npm-cache --prefer-offline
 

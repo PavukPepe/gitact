@@ -57,7 +57,7 @@ jobs:
       - name: Checkout repo
         uses: actions/checkout@v6
 
-        name: Setup npm
+      - name: Setup npm
         uses: actions/setup=node@v6
         with:
           node-version: 22

@@ -87,22 +87,12 @@ jobs:
       - name: Build Application
         run: npm run build
 
-      - name: Debug
-        run: |
-          echo "=== Build Output ==="
-          ls -la .next/
-          du -sh .next/
-          echo "=== Static files ==="
-          ls -la .next/static/
-          du -sh .next/static/
-          echo "=== Chunks ==="
-          find .next/static/chunks -name "*.js" -exec du -sh {} \; | sort -rh | head -10
-      
       - name: Upload Build Artifacts
         uses: actions/upload-artifact@v6
         with:
           name: next-build-${{ github.sha }}
-          path: .next/
+          path: .next
+          include-hidden-files: true
           retention-days: 3
 
   audit:

@@ -46,7 +46,7 @@ jobs:
         uses: actions/upload-artifact@v6
         with:
           name: eslint-report-${{ github.sha }}
-          paths: eslint-report.json
+          path: eslint-report.json
           retention-days: 7
 
   typecheck:
@@ -91,7 +91,7 @@ jobs:
         uses: actions/upload-artifact@v6
         with:
           name: next-build-${{ github.sha }}
-          paths: .next/
+          path: .next/
           exclude: .next/cache/**
           retention-days: 3
 

@@ -114,6 +114,14 @@ jobs:
       - name: Run npm audit
         run: npm audit --audit-level=high 2>&1 | tee audit-report.txt || true
 
+      - name: Upload Audit Report
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: audit-report-${{ github.sha }}
+          path: audit-report.txt
+          retention-days: 7
+
   bundle_size:
     name: Check Bundle Size
     runs-on: ubuntu-latest
@@ -129,6 +137,12 @@ jobs:
       
       - name: Install dependencies
         run: npm ci --cache .npm-cache --prefer-offline
+
+      - name: Download Build Artifacts
+        uses: actions/download-artifact@v6
+        with:
+          name: next-build-${{ github.sha }}
+          path: .next/
 
       - name: Check Bundle Size
         run: |

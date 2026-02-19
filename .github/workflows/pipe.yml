@@ -13,7 +13,7 @@ jobs:
         uses: actions/checkout@v6
 
       - name: Setup npm
-        uses: actions/setup=node@v6
+        uses: actions/setup-node@v6
         with:
           node-version: 22
       
@@ -31,7 +31,7 @@ jobs:
         uses: actions/checkout@v6
 
       - name: Setup npm
-        uses: actions/setup=node@v6
+        uses: actions/setup-node@v6
         with:
           node-version: 22
       
@@ -58,7 +58,7 @@ jobs:
         uses: actions/checkout@v6
 
       - name: Setup npm
-        uses: actions/setup=node@v6
+        uses: actions/setup-node@v6
         with:
           node-version: 22
       
@@ -77,7 +77,7 @@ jobs:
         uses: actions/checkout@v6
 
       - name: Setup npm
-        uses: actions/setup=node@v6
+        uses: actions/setup-node@v6
         with:
           node-version: 22
       
@@ -104,7 +104,7 @@ jobs:
         uses: actions/checkout@v6
 
       - name: Setup npm
-        uses: actions/setup=node@v6
+        uses: actions/setup-node@v6
         with:
           node-version: 22
       
@@ -123,7 +123,7 @@ jobs:
         uses: actions/checkout@v6
 
       - name: Setup npm
-        uses: actions/setup=node@v6
+        uses: actions/setup-node@v6
         with:
           node-version: 22
       

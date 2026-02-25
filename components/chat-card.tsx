@@ -1,6 +1,6 @@
 "use client"
 
-import { Globe, Send } from "lucide-react"
+import { Globe, Send, User } from "lucide-react"
 import { useSortable } from "@dnd-kit/sortable"
 import { CSS } from "@dnd-kit/utilities"
 
@@ -59,14 +59,16 @@ export function ChatCard({ chat, onOpen }: ChatCardProps) {
               <h4 className="font-medium text-sm truncate">{chat.clientName}</h4>
               <Badge
                 variant={chat.source === "telegram" ? "default" : "secondary"}
-                className="shrink-0 text-[10px] px-1.5 py-0 h-4"
+                className="shrink-0 text-[10px] px-1.5 py-0 h-4 max-w-22.5 truncate"
               >
                 {chat.source === "telegram" ? (
-                  <Send className="size-2.5 mr-1" />
+                  <Send className="size-2.5 mr-1 shrink-0" />
                 ) : (
-                  <Globe className="size-2.5 mr-1" />
+                  <Globe className="size-2.5 mr-1 shrink-0" />
                 )}
-                {chat.source === "telegram" ? "TG" : "Сайт"}
+                <span className="truncate">
+                  {chat.source === "telegram" ? "TG" : (chat.siteName || "Сайт")}
+                </span>
               </Badge>
             </div>
             <p className="text-xs text-muted-foreground mt-1 line-clamp-2">
@@ -88,6 +90,12 @@ export function ChatCard({ chat, onOpen }: ChatCardProps) {
                 {formatRelativeTime(chat.lastMessageTime)}
               </span>
             </div>
+            {chat.assignedManagerName && (
+              <div className="flex items-center gap-1 mt-1.5 text-[10px] text-muted-foreground">
+                <User className="size-2.5 shrink-0" />
+                <span className="truncate">{chat.assignedManagerName}</span>
+              </div>
+            )}
           </div>
         </div>
       </CardContent>

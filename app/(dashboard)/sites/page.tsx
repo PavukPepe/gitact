@@ -1,12 +1,23 @@
 "use client"
 
 import { useState, useEffect } from "react"
+import { useRoleGuard } from "@/hooks/use-role-guard"
 import { Plus, ExternalLink, Copy, Trash2, MoreHorizontal, Check, Globe, Settings } from "lucide-react"
 import Link from "next/link"
 
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog"
 import {
   Dialog,
   DialogContent,
@@ -34,12 +45,14 @@ import {
 import { fetchSites, createSite, deleteSite, fetchWidgetCode, type ApiSite } from "@/lib/api"
 
 export default function SitesPage() {
+  useRoleGuard(["admin"])
   const [sites, setSites] = useState<ApiSite[]>([])
   const [loading, setLoading] = useState(true)
   const [dialogOpen, setDialogOpen] = useState(false)
   const [submitting, setSubmitting] = useState(false)
   const [newSite, setNewSite] = useState({ name: "", url: "" })
   const [copiedId, setCopiedId] = useState<number | null>(null)
+  const [deleteConfirmId, setDeleteConfirmId] = useState<number | null>(null)
 
   const sitesLimit = 5
 
@@ -73,12 +86,15 @@ export default function SitesPage() {
     }
   }
 
-  const handleDeleteSite = async (id: number) => {
+  const handleDeleteSite = async () => {
+    if (deleteConfirmId === null) return
     try {
-      await deleteSite(id)
-      setSites(sites.filter((s) => s.id !== id))
+      await deleteSite(deleteConfirmId)
+      setSites(sites.filter((s) => s.id !== deleteConfirmId))
     } catch {
       // ошибка удаления
+    } finally {
+      setDeleteConfirmId(null)
     }
   }
 
@@ -235,7 +251,7 @@ export default function SitesPage() {
                       <DropdownMenuSeparator />
                       <DropdownMenuItem
                         className="text-destructive"
-                        onClick={() => handleDeleteSite(site.id)}
+                        onClick={() => setDeleteConfirmId(site.id)}
                       >
                         <Trash2 className="size-4 mr-2" />
                         Удалить
@@ -306,6 +322,26 @@ export default function SitesPage() {
           </Card>
         )}
       </div>
+
+      <AlertDialog open={deleteConfirmId !== null} onOpenChange={(open) => !open && setDeleteConfirmId(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Удалить сайт?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Это действие необратимо. Сайт, виджет и все связанные настройки будут удалены.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Отмена</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              onClick={handleDeleteSite}
+            >
+              Удалить
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   )
 }

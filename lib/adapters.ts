@@ -28,13 +28,11 @@ export function apiChatToChat(apiChat: ApiChat): Chat {
     lastMessageTime: new Date(apiChat.updated_at),
     tags: [],
     messages: [],
-    // Дополнительные поля для API
-    _apiId: apiChat.id,
-    _managerId: apiChat.assigned_manager,
-    _managerName: apiChat.manager_name,
-    _siteName: apiChat.site_name,
-    _siteId: apiChat.site,
-  } as Chat & Record<string, any>
+    assignedManagerId: apiChat.assigned_manager,
+    assignedManagerName: apiChat.manager_name,
+    siteName: apiChat.site_name,
+    siteId: apiChat.site,
+  }
 }
 
 /** Обратное преобразование статуса из frontend в backend формат */
@@ -55,5 +53,12 @@ export function apiMessageToMessage(apiMsg: ApiMessage): Message {
     content: apiMsg.content,
     sender: apiMsg.sender_type === "client" ? "client" : "manager",
     timestamp: new Date(apiMsg.timestamp),
+    files: (apiMsg.files || []).map((f) => ({
+      id: String(f.id),
+      url: f.file,
+      filename: f.filename,
+      mimeType: f.mime_type,
+      fileSize: f.file_size,
+    })),
   }
 }

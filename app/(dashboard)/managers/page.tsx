@@ -49,7 +49,9 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
-import { fetchUsers, createUser, updateUser, deleteUser, type ApiManager } from "@/lib/api"
+import { fetchUsers, createUser, updateUser, deleteUser, resetUserPassword, type ApiManager } from "@/lib/api"
+import { useRoleGuard } from "@/hooks/use-role-guard"
+import { useAuth } from "@/contexts/auth-context"
 
 const roleLabels: Record<string, string> = {
   admin: "Администратор",
@@ -58,6 +60,10 @@ const roleLabels: Record<string, string> = {
 }
 
 export default function ManagersPage() {
+  useRoleGuard(["admin", "rop"])
+  const { user } = useAuth()
+  const isAdmin = user?.role === "admin"
+
   const [managers, setManagers] = useState<ApiManager[]>([])
   const [loading, setLoading] = useState(true)
   const [dialogOpen, setDialogOpen] = useState(false)
@@ -70,12 +76,16 @@ export default function ManagersPage() {
     role: "manager",
   })
 
+  const [createError, setCreateError] = useState("")
   const [editDialogOpen, setEditDialogOpen] = useState(false)
   const [editingManager, setEditingManager] = useState<ApiManager | null>(null)
   const [editForm, setEditForm] = useState<{ first_name: string; last_name: string; role: "admin" | "rop" | "manager" }>({
     first_name: "", last_name: "", role: "manager",
   })
   const [deleteConfirmId, setDeleteConfirmId] = useState<number | null>(null)
+  const [resetPasswordId, setResetPasswordId] = useState<number | null>(null)
+  const [resetPasswordValue, setResetPasswordValue] = useState("")
+  const [resetPasswordError, setResetPasswordError] = useState("")
 
   useEffect(() => {
     loadManagers()
@@ -94,6 +104,7 @@ export default function ManagersPage() {
 
   const handleAddManager = async () => {
     if (!newManager.first_name || !newManager.email || !newManager.password) return
+    setCreateError("")
     setSubmitting(true)
     try {
       await createUser({
@@ -106,8 +117,9 @@ export default function ManagersPage() {
       await loadManagers()
       setNewManager({ first_name: "", last_name: "", email: "", password: "", role: "manager" })
       setDialogOpen(false)
-    } catch {
-      // ошибка создания
+    } catch (err: any) {
+      const msg = err?.email?.[0] || err?.detail || "Ошибка при создании пользователя."
+      setCreateError(msg)
     } finally {
       setSubmitting(false)
     }
@@ -131,6 +143,21 @@ export default function ManagersPage() {
       setManagers(managers.map((m) => (m.id === updated.id ? updated : m)))
     } catch {
       // ошибка изменения статуса
+    }
+  }
+
+  const handleResetPassword = async () => {
+    if (resetPasswordId === null) return
+    setResetPasswordError("")
+    setSubmitting(true)
+    try {
+      await resetUserPassword(resetPasswordId, resetPasswordValue)
+      setResetPasswordId(null)
+      setResetPasswordValue("")
+    } catch (err: any) {
+      setResetPasswordError(err?.password?.[0] || err?.detail || "Ошибка при сбросе пароля.")
+    } finally {
+      setSubmitting(false)
     }
   }
 
@@ -171,7 +198,7 @@ export default function ManagersPage() {
             Управление командой поддержки
           </p>
         </div>
-        <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+        {isAdmin && <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
           <DialogTrigger asChild>
             <Button>
               <Plus className="size-4 mr-2" />
@@ -253,6 +280,9 @@ export default function ManagersPage() {
                 </Select>
               </div>
             </div>
+            {createError && (
+              <p className="text-sm text-destructive px-1">{createError}</p>
+            )}
             <DialogFooter>
               <Button variant="outline" onClick={() => setDialogOpen(false)}>
                 Отмена
@@ -265,7 +295,7 @@ export default function ManagersPage() {
               </Button>
             </DialogFooter>
           </DialogContent>
-        </Dialog>
+        </Dialog>}
       </div>
 
       {/* Edit Dialog */}
@@ -312,6 +342,39 @@ export default function ManagersPage() {
           <DialogFooter>
             <Button variant="outline" onClick={() => setEditDialogOpen(false)}>Отмена</Button>
             <Button onClick={handleEditManager} disabled={submitting}>
+              {submitting ? "Сохранение..." : "Сохранить"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Reset Password Dialog */}
+      <Dialog open={resetPasswordId !== null} onOpenChange={(open) => !open && setResetPasswordId(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Сбросить пароль</DialogTitle>
+            <DialogDescription>Введите новый пароль для пользователя</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <Label>Новый пароль</Label>
+              <Input
+                type="password"
+                value={resetPasswordValue}
+                onChange={(e) => setResetPasswordValue(e.target.value)}
+                placeholder="Минимум 8 символов"
+              />
+            </div>
+            {resetPasswordError && (
+              <p className="text-sm text-destructive">{resetPasswordError}</p>
+            )}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setResetPasswordId(null)}>Отмена</Button>
+            <Button
+              onClick={handleResetPassword}
+              disabled={resetPasswordValue.length < 8 || submitting}
+            >
               {submitting ? "Сохранение..." : "Сохранить"}
             </Button>
           </DialogFooter>
@@ -397,24 +460,34 @@ export default function ManagersPage() {
                         </Button>
                       </DropdownMenuTrigger>
                       <DropdownMenuContent align="end">
-                        <DropdownMenuItem onClick={() => openEditDialog(manager)}>Редактировать</DropdownMenuItem>
-                        <DropdownMenuSeparator />
-                        {manager.is_active ? (
-                          <DropdownMenuItem onClick={() => handleToggleActive(manager)}>
-                            Деактивировать
-                          </DropdownMenuItem>
-                        ) : (
-                          <DropdownMenuItem onClick={() => handleToggleActive(manager)}>
-                            Активировать
-                          </DropdownMenuItem>
+                        {isAdmin && (
+                          <>
+                            <DropdownMenuItem onClick={() => openEditDialog(manager)}>Редактировать</DropdownMenuItem>
+                            <DropdownMenuItem onClick={() => { setResetPasswordId(manager.id); setResetPasswordValue(""); setResetPasswordError("") }}>
+                              Сбросить пароль
+                            </DropdownMenuItem>
+                            <DropdownMenuSeparator />
+                            {manager.is_active ? (
+                              <DropdownMenuItem onClick={() => handleToggleActive(manager)}>
+                                Деактивировать
+                              </DropdownMenuItem>
+                            ) : (
+                              <DropdownMenuItem onClick={() => handleToggleActive(manager)}>
+                                Активировать
+                              </DropdownMenuItem>
+                            )}
+                            <DropdownMenuSeparator />
+                            <DropdownMenuItem
+                              className="text-destructive"
+                              onClick={() => setDeleteConfirmId(manager.id)}
+                            >
+                              Удалить
+                            </DropdownMenuItem>
+                          </>
                         )}
-                        <DropdownMenuSeparator />
-                        <DropdownMenuItem
-                          className="text-destructive"
-                          onClick={() => setDeleteConfirmId(manager.id)}
-                        >
-                          Удалить
-                        </DropdownMenuItem>
+                        {!isAdmin && (
+                          <DropdownMenuItem disabled>Только просмотр</DropdownMenuItem>
+                        )}
                       </DropdownMenuContent>
                     </DropdownMenu>
                   </TableCell>

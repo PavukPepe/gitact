@@ -1,4 +1,11 @@
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000"
+function getApiBase(): string {
+  if (process.env.NEXT_PUBLIC_API_URL) return process.env.NEXT_PUBLIC_API_URL
+  if (typeof window !== "undefined") {
+    return `http://${window.location.hostname}:8000`
+  }
+  return "http://localhost:8000"
+}
+const API_BASE = getApiBase()
 
 // --- Token management ---
 
@@ -239,6 +246,7 @@ export interface ManagerStats {
   closed_chats: number
   avg_rating: number | null
   ratings_count: number
+  avg_response_time: number | null
 }
 
 // --- Chats API ---
@@ -294,6 +302,16 @@ export async function sendMessage(chatId: number, content: string) {
   return apiFetch<ApiMessage>(`/api/chats/${chatId}/messages/`, {
     method: "POST",
     body: JSON.stringify({ content }),
+  })
+}
+
+export async function sendMessageWithFiles(chatId: number, content: string, files: File[]) {
+  const form = new FormData()
+  if (content.trim()) form.append("content", content.trim())
+  files.forEach((f) => form.append("files", f))
+  return apiFetch<ApiMessage>(`/api/chats/${chatId}/messages/`, {
+    method: "POST",
+    body: form,
   })
 }
 
@@ -364,6 +382,13 @@ export async function updateUser(id: number, data: Partial<ApiManager>) {
 
 export async function deleteUser(id: number) {
   return apiFetch(`/api/users/${id}/`, { method: "DELETE" })
+}
+
+export async function resetUserPassword(id: number, password: string) {
+  return apiFetch(`/api/users/${id}/reset-password/`, {
+    method: "POST",
+    body: JSON.stringify({ password }),
+  })
 }
 
 // --- Templates API ---

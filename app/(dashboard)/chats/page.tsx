@@ -19,7 +19,10 @@ export default function ChatsPage() {
   const loadChats = useCallback(async () => {
     try {
       const res = await fetchChats({ page_size: "100" })
-      setChats(res.results.map(apiChatToChat))
+      const newChats = res.results.map(apiChatToChat)
+      setChats(newChats)
+      // Если открыт чат — обновляем его данные (статус, менеджер могли измениться)
+      setSelectedChat((prev) => prev ? (newChats.find((c) => c.id === prev.id) ?? prev) : null)
     } catch {
       // ошибка загрузки
     }
@@ -74,6 +77,19 @@ export default function ChatsPage() {
     setSelectedChat(null)
   }
 
+  const handleChatUpdate = (chatId: string, updates: Partial<Chat>) => {
+    setChats((prev) =>
+      prev.map((c) => (c.id === chatId ? { ...c, ...updates } : c))
+    )
+    setSelectedChat((prev) => (prev?.id === chatId ? { ...prev, ...updates } : prev))
+  }
+
+  const handleChatMerged = (deletedChatId: string) => {
+    setChats((prev) => prev.filter((c) => c.id !== deletedChatId))
+    setDetailOpen(false)
+    setSelectedChat(null)
+  }
+
   return (
     <div className="space-y-6">
       <div>
@@ -112,6 +128,9 @@ export default function ChatsPage() {
         chat={selectedChat}
         open={detailOpen}
         onClose={handleCloseDetail}
+        onChatUpdate={handleChatUpdate}
+        allChats={chats}
+        onChatMerged={handleChatMerged}
       />
     </div>
   )

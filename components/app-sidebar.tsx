@@ -22,42 +22,55 @@ import {
   SidebarMenuItem,
   SidebarFooter,
 } from "@/components/ui/sidebar"
+import { useAuth } from "@/contexts/auth-context"
 
-const menuItems = [
+type Role = "admin" | "rop" | "manager"
+
+const allMenuItems = [
   {
     title: "Dashboard",
     url: "/dashboard",
     icon: LayoutDashboard,
+    roles: ["admin", "rop"] as Role[],
   },
   {
     title: "Чаты",
     url: "/chats",
     icon: MessageSquare,
+    roles: ["admin", "rop", "manager"] as Role[],
   },
   {
     title: "Менеджеры",
     url: "/managers",
     icon: Users,
+    roles: ["admin", "rop"] as Role[],
   },
   {
     title: "Сайты",
     url: "/sites",
     icon: Globe,
+    roles: ["admin"] as Role[],
   },
   {
     title: "Интеграции",
     url: "/integrations",
     icon: Plug,
+    roles: ["admin"] as Role[],
   },
   {
     title: "Настройки",
     url: "/settings",
     icon: Settings,
+    roles: ["admin", "rop", "manager"] as Role[],
   },
 ]
 
 export function AppSidebar() {
   const pathname = usePathname()
+  const { user } = useAuth()
+  const role = (user?.role ?? "manager") as Role
+
+  const menuItems = allMenuItems.filter((item) => item.roles.includes(role))
 
   return (
     <Sidebar>
@@ -77,7 +90,7 @@ export function AppSidebar() {
                 <SidebarMenuItem key={item.title}>
                   <SidebarMenuButton
                     asChild
-                    isActive={pathname === item.url}
+                    isActive={pathname === item.url || pathname.startsWith(item.url + "/")}
                     tooltip={item.title}
                   >
                     <Link href={item.url}>

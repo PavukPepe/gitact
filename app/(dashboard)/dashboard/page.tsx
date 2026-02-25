@@ -1,15 +1,30 @@
 "use client"
 
-import { useEffect, useState } from "react"
-import { MessageSquare, Users, Globe, TrendingUp, ArrowUpRight, Star, BarChart3 } from "lucide-react"
+import { useEffect, useRef, useState } from "react"
+import { flushSync } from "react-dom"
+import { useRoleGuard } from "@/hooks/use-role-guard"
+import { MessageSquare, Users, Globe, TrendingUp, ArrowUpRight, Star, BarChart3, Clock, CheckCircle2, FileDown, Loader2 } from "lucide-react"
 
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
+import { Badge } from "@/components/ui/badge"
 import {
   fetchStatsOverview, fetchChats, fetchSites, fetchUsers,
-  fetchStatsTimeline, fetchRatingsStats,
-  type StatsOverview, type ApiChat, type TimelineItem, type RatingsStats,
+  fetchStatsTimeline, fetchRatingsStats, fetchManagerStats,
+  type StatsOverview, type ApiChat, type TimelineItem, type RatingsStats, type ManagerStats,
 } from "@/lib/api"
+import { StatsPDFReport } from "@/components/stats-pdf-report"
+import { captureElementToPDF } from "@/lib/pdf-export"
+
+function formatResponseTime(seconds: number | null): string {
+  if (seconds === null) return "—"
+  if (seconds < 60) return "< 1 мин"
+  const minutes = Math.floor(seconds / 60)
+  if (minutes < 60) return `${minutes} мин`
+  const hours = Math.floor(minutes / 60)
+  const mins = minutes % 60
+  return mins > 0 ? `${hours} ч ${mins} мин` : `${hours} ч`
+}
 
 const PERIODS = [
   { label: "Сегодня", value: "today" },
@@ -18,6 +33,7 @@ const PERIODS = [
 ]
 
 export default function DashboardPage() {
+  useRoleGuard(["admin", "rop"])
   const [stats, setStats] = useState<StatsOverview | null>(null)
   const [recentChats, setRecentChats] = useState<ApiChat[]>([])
   const [sitesCount, setSitesCount] = useState(0)
@@ -26,10 +42,16 @@ export default function DashboardPage() {
   const [period, setPeriod] = useState("month")
   const [timeline, setTimeline] = useState<TimelineItem[]>([])
   const [ratingsStats, setRatingsStats] = useState<RatingsStats | null>(null)
+  const [managerStats, setManagerStats] = useState<ManagerStats[]>([])
+  const [exporting, setExporting] = useState(false)
+  const [exportError, setExportError] = useState<string | null>(null)
+  const [yearlyTimeline, setYearlyTimeline] = useState<TimelineItem[]>([])
+  const reportRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
     fetchStatsOverview({ period }).then(setStats).catch(() => {})
     fetchStatsTimeline({ period }).then((r) => setTimeline(r.timeline)).catch(() => {})
+    fetchManagerStats({ period }).then(setManagerStats).catch(() => {})
   }, [period])
 
   useEffect(() => {
@@ -41,6 +63,34 @@ export default function DashboardPage() {
     }).catch(() => {})
     fetchRatingsStats().then(setRatingsStats).catch(() => {})
   }, [])
+
+  const handleExportPDF = async () => {
+    setExporting(true)
+    setExportError(null)
+    try {
+      // Загружаем годовые данные
+      const yearAgo = new Date()
+      yearAgo.setFullYear(yearAgo.getFullYear() - 1)
+      const dateFrom = yearAgo.toISOString().split("T")[0]
+      const dateTo = new Date().toISOString().split("T")[0]
+      const yearly = await fetchStatsTimeline({ date_from: dateFrom, date_to: dateTo })
+
+      // flushSync гарантирует, что React обновит DOM синхронно перед захватом
+      flushSync(() => setYearlyTimeline(yearly.timeline))
+
+      if (!reportRef.current) {
+        throw new Error("Элемент отчёта не найден")
+      }
+
+      const date = new Date().toLocaleDateString("ru-RU").replace(/\./g, "-")
+      await captureElementToPDF(reportRef.current, `statistics-${date}.pdf`)
+    } catch (err) {
+      console.error("PDF export error:", err)
+      setExportError("Не удалось создать PDF. Проверьте консоль.")
+    } finally {
+      setExporting(false)
+    }
+  }
 
   const statCards = [
     {
@@ -89,17 +139,32 @@ export default function DashboardPage() {
             Обзор активности вашего чат-сервиса
           </p>
         </div>
-        <div className="flex gap-1">
-          {PERIODS.map((p) => (
-            <Button
-              key={p.value}
-              variant={period === p.value ? "default" : "outline"}
-              size="sm"
-              onClick={() => setPeriod(p.value)}
-            >
-              {p.label}
+        <div className="flex gap-2">
+          <div className="flex gap-1">
+            {PERIODS.map((p) => (
+              <Button
+                key={p.value}
+                variant={period === p.value ? "default" : "outline"}
+                size="sm"
+                onClick={() => setPeriod(p.value)}
+              >
+                {p.label}
+              </Button>
+            ))}
+          </div>
+          <div className="flex flex-col items-end gap-1">
+            <Button onClick={handleExportPDF} disabled={exporting} variant="outline" size="sm">
+              {exporting ? (
+                <Loader2 className="size-4 mr-2 animate-spin" />
+              ) : (
+                <FileDown className="size-4 mr-2" />
+              )}
+              {exporting ? "Экспорт..." : "Экспорт PDF"}
             </Button>
-          ))}
+            {exportError && (
+              <p className="text-xs text-destructive">{exportError}</p>
+            )}
+          </div>
         </div>
       </div>
 
@@ -215,6 +280,81 @@ export default function DashboardPage() {
         </Card>
       </div>
 
+      {/* Статистика по менеджерам */}
+      {managerStats.length > 0 && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Users className="size-5" />
+              Статистика по менеджерам
+            </CardTitle>
+            <CardDescription>Эффективность команды за выбранный период</CardDescription>
+          </CardHeader>
+          <CardContent className="p-0">
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b bg-muted/40">
+                    <th className="text-left px-4 py-3 font-medium text-muted-foreground">Менеджер</th>
+                    <th className="text-center px-4 py-3 font-medium text-muted-foreground">Статус</th>
+                    <th className="text-center px-4 py-3 font-medium text-muted-foreground">
+                      <span className="flex items-center justify-center gap-1">
+                        <CheckCircle2 className="size-3.5" />
+                        Обработано
+                      </span>
+                    </th>
+                    <th className="text-center px-4 py-3 font-medium text-muted-foreground">Активных</th>
+                    <th className="text-center px-4 py-3 font-medium text-muted-foreground">
+                      <span className="flex items-center justify-center gap-1">
+                        <Clock className="size-3.5" />
+                        Скорость ответа
+                      </span>
+                    </th>
+                    <th className="text-center px-4 py-3 font-medium text-muted-foreground">Оценка</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {managerStats.map((m, i) => (
+                    <tr key={m.id} className={i % 2 === 0 ? "bg-background" : "bg-muted/20"}>
+                      <td className="px-4 py-3">
+                        <div className="font-medium">{m.name || m.email}</div>
+                        <div className="text-xs text-muted-foreground">{m.email}</div>
+                      </td>
+                      <td className="px-4 py-3 text-center">
+                        <Badge
+                          variant={m.status === "online" ? "default" : "secondary"}
+                          className="text-[10px] px-2 py-0 h-5"
+                        >
+                          <span className={`size-1.5 rounded-full mr-1.5 inline-block ${m.status === "online" ? "bg-emerald-400" : "bg-slate-400"}`} />
+                          {m.status === "online" ? "Онлайн" : "Офлайн"}
+                        </Badge>
+                      </td>
+                      <td className="px-4 py-3 text-center font-semibold">{m.closed_chats}</td>
+                      <td className="px-4 py-3 text-center text-muted-foreground">{m.active_chats}</td>
+                      <td className="px-4 py-3 text-center">
+                        <span className={m.avg_response_time === null ? "text-muted-foreground" : m.avg_response_time <= 300 ? "text-emerald-600 font-medium" : m.avg_response_time <= 1800 ? "text-amber-600 font-medium" : "text-red-500 font-medium"}>
+                          {formatResponseTime(m.avg_response_time)}
+                        </span>
+                      </td>
+                      <td className="px-4 py-3 text-center">
+                        {m.avg_rating ? (
+                          <span className="flex items-center justify-center gap-1">
+                            <Star className="size-3.5 fill-amber-400 text-amber-400" />
+                            <span className="font-medium">{m.avg_rating}</span>
+                          </span>
+                        ) : (
+                          <span className="text-muted-foreground">—</span>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
       {/* Оценки */}
       {ratingsStats && ratingsStats.total_ratings > 0 && (
         <Card>
@@ -253,6 +393,22 @@ export default function DashboardPage() {
           </CardContent>
         </Card>
       )}
+
+      {/* Скрытый блок для экспорта PDF — всегда в DOM */}
+      <div
+        ref={reportRef}
+        style={{ position: "absolute", top: 0, left: "-9999px", width: 794, pointerEvents: "none" }}
+        aria-hidden="true"
+      >
+        <StatsPDFReport
+          stats={stats}
+          managerStats={managerStats}
+          monthlyTimeline={timeline}
+          yearlyTimeline={yearlyTimeline}
+          ratingsStats={ratingsStats}
+          generatedAt={new Date()}
+        />
+      </div>
     </div>
   )
 }

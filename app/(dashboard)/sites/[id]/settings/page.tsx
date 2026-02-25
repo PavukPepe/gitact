@@ -777,7 +777,7 @@ export default function SiteSettingsPage() {
                     ref={previewRef}
                     className={`relative bg-muted/50 rounded-lg overflow-hidden transition-all ${
                       previewMode === "desktop"
-                        ? "w-full h-72"
+                        ? "w-full aspect-video"
                         : "w-[320px] h-[560px] border-8 border-foreground/20 rounded-[2rem]"
                     }`}
                   >

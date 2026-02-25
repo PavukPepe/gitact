@@ -1,7 +1,8 @@
 "use client"
 
 import { useEffect, useState } from "react"
-import { Send, Globe, MessageCircle, Bot, Zap, CheckCircle2, Building2, ArrowRight } from "lucide-react"
+import { useRoleGuard } from "@/hooks/use-role-guard"
+import { Send, Globe, CheckCircle2, ArrowRight } from "lucide-react"
 import Link from "next/link"
 
 import { Button } from "@/components/ui/button"
@@ -10,6 +11,7 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 import { fetchSites, type ApiSite } from "@/lib/api"
 
 export default function IntegrationsPage() {
+  useRoleGuard(["admin"])
   const [sites, setSites] = useState<ApiSite[]>([])
   const [loading, setLoading] = useState(true)
 
@@ -44,42 +46,6 @@ export default function IntegrationsPage() {
       icon: Globe,
       color: "bg-emerald-500",
       connected: hasWidget,
-    },
-    {
-      id: "whatsapp",
-      name: "WhatsApp",
-      description: "Интеграция с WhatsApp Business API для общения с клиентами",
-      icon: MessageCircle,
-      color: "bg-green-500",
-      connected: false,
-      comingSoon: true,
-    },
-    {
-      id: "chatgpt",
-      name: "ChatGPT",
-      description: "Автоматические ответы с помощью искусственного интеллекта",
-      icon: Bot,
-      color: "bg-violet-500",
-      connected: false,
-      comingSoon: true,
-    },
-    {
-      id: "zapier",
-      name: "Zapier",
-      description: "Автоматизация рабочих процессов с тысячами приложений",
-      icon: Zap,
-      color: "bg-orange-500",
-      connected: false,
-      comingSoon: true,
-    },
-    {
-      id: "bitrix24",
-      name: "Bitrix24",
-      description: "Интеграция с CRM Битрикс24 для управления клиентами и сделками",
-      icon: Building2,
-      color: "bg-blue-600",
-      connected: false,
-      comingSoon: true,
     },
   ]
 

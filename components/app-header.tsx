@@ -1,6 +1,6 @@
 "use client"
 
-import { Bell, Moon, Sun } from "lucide-react"
+import { Moon, Sun } from "lucide-react"
 import { useTheme } from "next-themes"
 import { useRouter } from "next/navigation"
 
@@ -41,14 +41,6 @@ export function AppHeader() {
           <Sun className="size-4 rotate-0 scale-100 transition-all dark:-rotate-90 dark:scale-0" />
           <Moon className="absolute size-4 rotate-90 scale-0 transition-all dark:rotate-0 dark:scale-100" />
           <span className="sr-only">Переключить тему</span>
-        </Button>
-
-        <Button variant="ghost" size="icon" className="relative">
-          <Bell className="size-4" />
-          <span className="absolute -right-1 -top-1 flex size-4 items-center justify-center rounded-full bg-primary text-[10px] text-primary-foreground">
-            3
-          </span>
-          <span className="sr-only">Уведомления</span>
         </Button>
 
         <DropdownMenu>

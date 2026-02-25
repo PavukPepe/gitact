@@ -59,14 +59,26 @@ export function KanbanBoard({
     if (!over) return
 
     const chatId = active.id as string
-    const newStatus = over.id as ChatStatus
+    const overId = over.id as string
 
-    if (statuses.includes(newStatus)) {
-      const updatedChats = chats.map((chat) =>
-        chat.id === chatId ? { ...chat, status: newStatus } : chat
-      )
-      onChatsChange(updatedChats)
+    // over.id — либо ID колонки (статус), либо ID карточки (при наведении на чужую карточку)
+    let newStatus: ChatStatus | undefined
+    if (statuses.includes(overId as ChatStatus)) {
+      newStatus = overId as ChatStatus
+    } else {
+      const overChat = chats.find((c) => c.id === overId)
+      if (overChat) newStatus = overChat.status
     }
+
+    if (!newStatus) return
+
+    const currentChat = chats.find((c) => c.id === chatId)
+    if (!currentChat || currentChat.status === newStatus) return
+
+    const updatedChats = chats.map((chat) =>
+      chat.id === chatId ? { ...chat, status: newStatus! } : chat
+    )
+    onChatsChange(updatedChats)
   }
 
   const chatsByStatus = statuses.reduce(

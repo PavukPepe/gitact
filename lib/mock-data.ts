@@ -14,6 +14,19 @@ export interface Chat {
   lastMessageTime: Date
   tags: ChatTag[]
   messages: Message[]
+  // API-backed fields
+  assignedManagerId?: number | null
+  assignedManagerName?: string | null
+  siteName?: string | null
+  siteId?: number | null
+}
+
+export interface MessageFile {
+  id: string
+  url: string
+  filename: string
+  mimeType: string
+  fileSize: number
 }
 
 export interface Message {
@@ -21,6 +34,7 @@ export interface Message {
   content: string
   sender: "client" | "manager"
   timestamp: Date
+  files?: MessageFile[]
 }
 
 export interface Manager {

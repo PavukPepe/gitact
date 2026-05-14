@@ -11,9 +11,9 @@ WORKDIR /app
 RUN sed -i 's|dl-cdn.alpinelinux.org|mirror.yandex.ru/mirrors|g' /etc/apk/repositories && \
     apk add --no-cache libc6-compat
 COPY package.json pnpm-lock.yaml* package-lock.json* ./
-# npm registry тоже на российское зеркало
+# npm registry на российское зеркало + pnpm 10 (pnpm 11 ругается на build-скрипты sharp/core-js)
 RUN npm config set registry https://registry.npmmirror.com && \
-    corepack enable && \
+    npm install -g pnpm@10 && \
     if [ -f pnpm-lock.yaml ]; then pnpm install --frozen-lockfile; \
     elif [ -f package-lock.json ]; then npm ci; \
     else npm install; fi
@@ -27,7 +27,7 @@ COPY . .
 # NEXT_PUBLIC_API_URL прокидывается build-аргументом
 ARG NEXT_PUBLIC_API_URL
 ENV NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL
-RUN corepack enable && \
+RUN npm install -g pnpm@10 && \
     if [ -f pnpm-lock.yaml ]; then pnpm build; \
     else npm run build; fi
 

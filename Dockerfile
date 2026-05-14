@@ -7,9 +7,13 @@
 # --- Stage 1: deps -------------------------------------------------------
 FROM node:20-alpine AS deps
 WORKDIR /app
-RUN apk add --no-cache libc6-compat
+# Подменяем дефолтное зеркало Alpine на yandex — dl-cdn.alpinelinux.org часто тупит из РФ
+RUN sed -i 's|dl-cdn.alpinelinux.org|mirror.yandex.ru/mirrors|g' /etc/apk/repositories && \
+    apk add --no-cache libc6-compat
 COPY package.json pnpm-lock.yaml* package-lock.json* ./
-RUN corepack enable && \
+# npm registry тоже на российское зеркало
+RUN npm config set registry https://registry.npmmirror.com && \
+    corepack enable && \
     if [ -f pnpm-lock.yaml ]; then pnpm install --frozen-lockfile; \
     elif [ -f package-lock.json ]; then npm ci; \
     else npm install; fi

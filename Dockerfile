@@ -5,7 +5,7 @@
 # =====================================================================
 
 # --- Stage 1: deps -------------------------------------------------------
-FROM node:20-alpine AS deps
+FROM node:22-alpine AS deps
 WORKDIR /app
 # Подменяем дефолтное зеркало Alpine на yandex — dl-cdn.alpinelinux.org часто тупит из РФ
 RUN sed -i 's|dl-cdn.alpinelinux.org|mirror.yandex.ru/mirrors|g' /etc/apk/repositories && \
@@ -19,7 +19,7 @@ RUN npm config set registry https://registry.npmmirror.com && \
     else npm install; fi
 
 # --- Stage 2: builder ---------------------------------------------------
-FROM node:20-alpine AS builder
+FROM node:22-alpine AS builder
 WORKDIR /app
 ENV NEXT_TELEMETRY_DISABLED=1
 COPY --from=deps /app/node_modules ./node_modules
@@ -32,7 +32,7 @@ RUN corepack enable && \
     else npm run build; fi
 
 # --- Stage 3: runner -----------------------------------------------------
-FROM node:20-alpine AS runner
+FROM node:22-alpine AS runner
 WORKDIR /app
 ENV NODE_ENV=production
 ENV NEXT_TELEMETRY_DISABLED=1

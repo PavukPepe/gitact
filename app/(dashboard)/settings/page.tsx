@@ -348,15 +348,15 @@ export default function SettingsPage() {
         {/* Info Card */}
         <Card>
           <CardHeader>
-            <CardTitle>Настройки виджета и Telegram</CardTitle>
+            <CardTitle>Настройки сайтов</CardTitle>
             <CardDescription>
-              Настройки виджета и интеграции с Telegram настраиваются индивидуально для каждого сайта
+              Виджет, расписание работы и email-канал настраиваются индивидуально для каждого сайта
             </CardDescription>
           </CardHeader>
           <CardContent>
             <p className="text-sm text-muted-foreground mb-4">
               Перейдите в раздел «Сайты» и нажмите на иконку шестерёнки рядом с нужным сайтом,
-              чтобы настроить внешний вид виджета и подключить Telegram бота.
+              чтобы настроить внешний вид виджета и подключить email-канал.
             </p>
             <Button variant="outline" className="bg-transparent" asChild>
               <a href="/sites">Перейти к сайтам</a>

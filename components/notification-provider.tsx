@@ -67,7 +67,7 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
         switch (data.type) {
           case "new_chat": {
             const title = "Новая заявка"
-            const body = `${data.client_name || "Клиент"} — ${data.channel === "telegram" ? "Telegram" : "Виджет"}`
+            const body = `${data.client_name || "Клиент"} — ${data.channel === "email" ? "Email" : "Виджет"}`
             toast({ title, description: body })
             playSound()
             if (document.hidden) showDesktopNotification(title, body)

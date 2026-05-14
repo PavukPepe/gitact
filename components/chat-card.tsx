@@ -1,14 +1,19 @@
 "use client"
 
-import { Globe, Send, User } from "lucide-react"
+import { Globe, Mail, User } from "lucide-react"
 import { useSortable } from "@dnd-kit/sortable"
 import { CSS } from "@dnd-kit/utilities"
 
 import { Card, CardContent } from "@/components/ui/card"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import { Badge } from "@/components/ui/badge"
-import type { Chat } from "@/lib/mock-data"
-import { formatRelativeTime, getTagLabel } from "@/lib/mock-data"
+import type { Chat, ChatSource } from "@/lib/chat-types"
+import { formatRelativeTime, getTagLabel } from "@/lib/chat-types"
+
+const CHANNEL_META: Record<ChatSource, { label: string; icon: typeof Globe }> = {
+  website: { label: "Виджет", icon: Globe },
+  email: { label: "Email", icon: Mail },
+}
 
 interface ChatCardProps {
   chat: Chat
@@ -55,23 +60,33 @@ export function ChatCard({ chat, onOpen }: ChatCardProps) {
             </AvatarFallback>
           </Avatar>
           <div className="flex-1 min-w-0">
-            <div className="flex items-center justify-between gap-2">
-              <h4 className="font-medium text-sm truncate">{chat.clientName}</h4>
-              <Badge
-                variant={chat.source === "telegram" ? "default" : "secondary"}
-                className="shrink-0 text-[10px] px-1.5 py-0 h-4 max-w-22.5 truncate"
-              >
-                {chat.source === "telegram" ? (
-                  <Send className="size-2.5 mr-1 shrink-0" />
-                ) : (
-                  <Globe className="size-2.5 mr-1 shrink-0" />
-                )}
-                <span className="truncate">
-                  {chat.source === "telegram" ? "TG" : (chat.siteName || "Сайт")}
-                </span>
-              </Badge>
+            <h4 className="font-medium text-sm truncate">{chat.clientName}</h4>
+            <div className="flex items-center gap-1 mt-1 flex-wrap">
+              {(() => {
+                const Icon = CHANNEL_META[chat.source].icon
+                return (
+                  <Badge
+                    variant="secondary"
+                    className="shrink-0 text-[10px] px-1.5 py-0 h-4 gap-1"
+                    title={CHANNEL_META[chat.source].label}
+                  >
+                    <Icon className="size-2.5 shrink-0" />
+                    <span>{CHANNEL_META[chat.source].label}</span>
+                  </Badge>
+                )
+              })()}
+              {chat.siteName && (
+                <Badge
+                  variant="outline"
+                  className="shrink-0 text-[10px] px-1.5 py-0 h-4 gap-1 max-w-40 truncate"
+                  title={chat.siteName}
+                >
+                  <Globe className="size-2.5 shrink-0" />
+                  <span className="truncate">{chat.siteName}</span>
+                </Badge>
+              )}
             </div>
-            <p className="text-xs text-muted-foreground mt-1 line-clamp-2">
+            <p className="text-xs text-muted-foreground mt-1.5 line-clamp-2">
               {chat.lastMessage}
             </p>
             <div className="flex items-center justify-between mt-1.5">

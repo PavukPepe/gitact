@@ -1,0 +1,15 @@
+.git
+.gitignore
+node_modules
+.next
+.next/cache
+.vercel
+*.log
+.env*
+!.env.production.example
+README.md
+REPORT_TEMPLATE*
+Dockerfile
+.dockerignore
+*.tsbuildinfo
+.DS_Store

@@ -49,7 +49,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
-import { fetchUsers, createUser, updateUser, deleteUser, resetUserPassword, type ApiManager } from "@/lib/api"
+import { fetchUsers, createUser, updateUser, deleteUser, resetUserPassword, resendInvite, type ApiManager } from "@/lib/api"
 import { useRoleGuard } from "@/hooks/use-role-guard"
 import { useAuth } from "@/contexts/auth-context"
 
@@ -72,7 +72,6 @@ export default function ManagersPage() {
     first_name: "",
     last_name: "",
     email: "",
-    password: "",
     role: "manager",
   })
 
@@ -103,19 +102,18 @@ export default function ManagersPage() {
   }
 
   const handleAddManager = async () => {
-    if (!newManager.first_name || !newManager.email || !newManager.password) return
+    if (!newManager.first_name || !newManager.email) return
     setCreateError("")
     setSubmitting(true)
     try {
       await createUser({
         email: newManager.email,
-        password: newManager.password,
         first_name: newManager.first_name,
         last_name: newManager.last_name,
         role: newManager.role,
       })
       await loadManagers()
-      setNewManager({ first_name: "", last_name: "", email: "", password: "", role: "manager" })
+      setNewManager({ first_name: "", last_name: "", email: "", role: "manager" })
       setDialogOpen(false)
     } catch (err: unknown) {
       const e = err as { email?: string[]; detail?: string }
@@ -211,7 +209,7 @@ export default function ManagersPage() {
             <DialogHeader>
               <DialogTitle>Добавить менеджера</DialogTitle>
               <DialogDescription>
-                Заполните данные нового менеджера
+                На указанный email придёт письмо со ссылкой для задания пароля.
               </DialogDescription>
             </DialogHeader>
             <div className="space-y-4 py-4">
@@ -252,18 +250,6 @@ export default function ManagersPage() {
                 />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="password">Пароль</Label>
-                <Input
-                  id="password"
-                  type="password"
-                  value={newManager.password}
-                  onChange={(e) =>
-                    setNewManager({ ...newManager, password: e.target.value })
-                  }
-                  placeholder="Минимум 8 символов"
-                />
-              </div>
-              <div className="space-y-2">
                 <Label htmlFor="role">Роль</Label>
                 <Select
                   value={newManager.role}
@@ -291,7 +277,7 @@ export default function ManagersPage() {
               </Button>
               <Button
                 onClick={handleAddManager}
-                disabled={!newManager.first_name || !newManager.email || !newManager.password || submitting}
+                disabled={!newManager.first_name || !newManager.email || submitting}
               >
                 {submitting ? "Добавление..." : "Добавить"}
               </Button>
@@ -465,8 +451,11 @@ export default function ManagersPage() {
                         {isAdmin && (
                           <>
                             <DropdownMenuItem onClick={() => openEditDialog(manager)}>Редактировать</DropdownMenuItem>
+                            <DropdownMenuItem onClick={() => resendInvite(manager.id).catch(() => {})}>
+                              Повторить приглашение
+                            </DropdownMenuItem>
                             <DropdownMenuItem onClick={() => { setResetPasswordId(manager.id); setResetPasswordValue(""); setResetPasswordError("") }}>
-                              Сбросить пароль
+                              Сбросить пароль вручную
                             </DropdownMenuItem>
                             <DropdownMenuSeparator />
                             {manager.is_active ? (

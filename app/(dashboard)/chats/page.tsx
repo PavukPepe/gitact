@@ -1,17 +1,22 @@
 "use client"
 
 import { useEffect, useState, useCallback } from "react"
+import { useRouter, useSearchParams } from "next/navigation"
 import { LayoutGrid, List } from "lucide-react"
 
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { KanbanBoard } from "@/components/kanban-board"
 import { ChatsList } from "@/components/chats-list"
 import { ChatDetail } from "@/components/chat-detail"
-import { type Chat } from "@/lib/mock-data"
-import { fetchChats, updateChatStatus, connectNotificationsWS } from "@/lib/api"
+import { type Chat } from "@/lib/chat-types"
+import { fetchChats, fetchChat, updateChatStatus, connectNotificationsWS, deleteChat } from "@/lib/api"
 import { apiChatToChat, chatStatusToApi } from "@/lib/adapters"
 
 export default function ChatsPage() {
+  const router = useRouter()
+  const searchParams = useSearchParams()
+  const requestedChatId = searchParams.get("id")
+
   const [chats, setChats] = useState<Chat[]>([])
   const [selectedChat, setSelectedChat] = useState<Chat | null>(null)
   const [detailOpen, setDetailOpen] = useState(false)
@@ -32,7 +37,24 @@ export default function ChatsPage() {
     loadChats()
   }, [loadChats])
 
-  // WebSocket для уведомлений о новых чатах
+  // Авто-открытие чата по ?id=... из URL (например, при переходе с карточки клиента)
+  useEffect(() => {
+    if (!requestedChatId) return
+    const fromList = chats.find((c) => c.id === requestedChatId)
+    if (fromList) {
+      setSelectedChat(fromList)
+      setDetailOpen(true)
+      return
+    }
+    // Чат не в списке (закрыт + paginated/другой статус) — догружаем напрямую
+    fetchChat(Number(requestedChatId))
+      .then((api) => {
+        setSelectedChat(apiChatToChat(api))
+        setDetailOpen(true)
+      })
+      .catch(() => {})
+  }, [requestedChatId, chats])
+
   useEffect(() => {
     const ws = connectNotificationsWS()
     if (!ws) return
@@ -75,6 +97,9 @@ export default function ChatsPage() {
   const handleCloseDetail = () => {
     setDetailOpen(false)
     setSelectedChat(null)
+    if (requestedChatId) {
+      router.replace("/chats", { scroll: false })
+    }
   }
 
   const handleChatUpdate = (chatId: string, updates: Partial<Chat>) => {
@@ -84,18 +109,13 @@ export default function ChatsPage() {
     setSelectedChat((prev) => (prev?.id === chatId ? { ...prev, ...updates } : prev))
   }
 
-  const handleChatMerged = (deletedChatId: string) => {
-    setChats((prev) => prev.filter((c) => c.id !== deletedChatId))
-    setDetailOpen(false)
-    setSelectedChat(null)
-  }
 
   return (
     <div className="space-y-6">
       <div>
         <h1 className="text-2xl font-bold tracking-tight">Чаты</h1>
         <p className="text-muted-foreground">
-          Управляйте входящими сообщениями с сайта и Telegram
+          Управляйте входящими сообщениями с сайтов
         </p>
       </div>
 
@@ -120,7 +140,7 @@ export default function ChatsPage() {
         </TabsContent>
 
         <TabsContent value="list" className="mt-4">
-          <ChatsList chats={chats} onOpenChat={handleOpenChat} />
+          <ChatsList chats={chats} onOpenChat={handleOpenChat} onChatsChange={setChats} />
         </TabsContent>
       </Tabs>
 
@@ -129,8 +149,6 @@ export default function ChatsPage() {
         open={detailOpen}
         onClose={handleCloseDetail}
         onChatUpdate={handleChatUpdate}
-        allChats={chats}
-        onChatMerged={handleChatMerged}
       />
     </div>
   )

@@ -2,6 +2,19 @@ export async function captureElementToPDF(element: HTMLElement, filename: string
   const html2canvas = (await import("html2canvas")).default
   const { jsPDF } = await import("jspdf")
 
+  // Заранее прогреваем Montserrat у браузера — чтобы шрифт был кеширован
+  // к моменту, когда html2canvas склонирует поддерево в офскрин-фрейм.
+  if (typeof document !== "undefined" && document.fonts) {
+    try {
+      await Promise.all([
+        document.fonts.load("400 16px Montserrat"),
+        document.fonts.load("500 16px Montserrat"),
+        document.fonts.load("600 16px Montserrat"),
+        document.fonts.load("700 16px Montserrat"),
+      ])
+    } catch { /* не блокируем экспорт, если шрифт не подхватился */ }
+  }
+
   const canvas = await html2canvas(element, {
     scale: 2,
     useCORS: true,
@@ -11,15 +24,20 @@ export async function captureElementToPDF(element: HTMLElement, filename: string
     scrollY: 0,
     windowWidth: element.scrollWidth,
     windowHeight: element.scrollHeight,
-    // Удаляем все внешние стили из клонированного документа:
-    // StatsPDFReport использует 100% inline-стили, поэтому Tailwind/shadcn
-    // oklch()-переменные не нужны и только ломают html2canvas
-    onclone: (_doc, clonedElement) => {
-      const root = clonedElement.ownerDocument
-      root.querySelectorAll('style, link[rel="stylesheet"]').forEach((el) => el.remove())
-      // Гарантируем белый фон без CSS-переменных
+    // html2canvas не парсит oklch() из Tailwind v4 → стили срезаем.
+    // Шрифт инжекчем повторно через Google Fonts (он уже в кеше браузера
+    // после прогрева выше) и подкрепляем дублирующим именем 'Montserrat'.
+    onclone: (doc, clonedElement) => {
+      doc.querySelectorAll('style, link[rel="stylesheet"]').forEach((el) => el.remove())
+      const fontLink = doc.createElement("link")
+      fontLink.rel = "stylesheet"
+      fontLink.href =
+        "https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700&display=swap"
+      doc.head.appendChild(fontLink)
       clonedElement.style.background = "#ffffff"
-      clonedElement.style.color = "#1e293b"
+      clonedElement.style.color = "#0f172a"
+      clonedElement.style.fontFamily =
+        "'Montserrat', 'Trebuchet MS', 'Lucida Sans Unicode', sans-serif"
     },
   })
 

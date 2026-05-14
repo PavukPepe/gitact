@@ -9,6 +9,7 @@ import {
   Plug,
   Globe,
   LayoutDashboard,
+  BookUser,
 } from "lucide-react"
 
 import {
@@ -23,6 +24,7 @@ import {
   SidebarFooter,
 } from "@/components/ui/sidebar"
 import { useAuth } from "@/contexts/auth-context"
+import { cn } from "@/lib/utils"
 
 type Role = "admin" | "rop" | "manager"
 
@@ -46,6 +48,12 @@ const allMenuItems = [
     roles: ["admin", "rop"] as Role[],
   },
   {
+    title: "Контакты",
+    url: "/contacts",
+    icon: BookUser,
+    roles: ["admin", "rop", "manager"] as Role[],
+  },
+  {
     title: "Сайты",
     url: "/sites",
     icon: Globe,
@@ -61,7 +69,7 @@ const allMenuItems = [
     title: "Настройки",
     url: "/settings",
     icon: Settings,
-    roles: ["admin", "rop", "manager"] as Role[],
+    roles: ["admin", "rop"] as Role[],
   },
 ]
 
@@ -104,10 +112,23 @@ export function AppSidebar() {
           </SidebarGroupContent>
         </SidebarGroup>
       </SidebarContent>
-      <SidebarFooter className="border-t border-sidebar-border p-4">
-        <div className="text-xs text-muted-foreground">
-          MultiChat Hub v1.0
-        </div>
+      <SidebarFooter className="border-t border-sidebar-border p-4 space-y-2">
+        {user?.plan && (
+          <div className="flex items-center justify-between">
+            <span className="text-xs text-muted-foreground">Тариф</span>
+            <span className={cn(
+              "text-xs font-semibold px-2 py-0.5 rounded-full",
+              user.plan === "enterprise"
+                ? "bg-violet-500/10 text-violet-500"
+                : user.plan === "business"
+                  ? "bg-blue-500/10 text-blue-500"
+                  : "bg-slate-500/10 text-slate-500"
+            )}>
+              {user.plan === "enterprise" ? "Корпоратив" : user.plan === "business" ? "Бизнес" : "Старт"}
+            </span>
+          </div>
+        )}
+        <div className="text-xs text-muted-foreground truncate">{user?.email}</div>
       </SidebarFooter>
     </Sidebar>
   )

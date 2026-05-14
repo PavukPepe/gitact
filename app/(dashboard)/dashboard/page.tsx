@@ -3,17 +3,25 @@
 import { useEffect, useRef, useState } from "react"
 import { flushSync } from "react-dom"
 import { useRoleGuard } from "@/hooks/use-role-guard"
-import { MessageSquare, Users, Globe, TrendingUp, ArrowUpRight, Star, BarChart3, Clock, CheckCircle2, FileDown, Loader2 } from "lucide-react"
+import { format } from "date-fns"
+import { ru } from "date-fns/locale"
+import type { DateRange } from "react-day-picker"
+import { CalendarIcon, MessageSquare, Users, Globe, TrendingUp, ArrowUpRight, Star, BarChart3, Clock, CheckCircle2, FileDown, Loader2 } from "lucide-react"
 
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
+import { Calendar } from "@/components/ui/calendar"
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
+import { cn } from "@/lib/utils"
 import {
-  fetchStatsOverview, fetchChats, fetchSites, fetchUsers,
-  fetchStatsTimeline, fetchRatingsStats, fetchManagerStats,
-  type StatsOverview, type ApiChat, type TimelineItem, type RatingsStats, type ManagerStats,
+  fetchStatsOverview, fetchChats,
+  fetchStatsTimeline, fetchRatingsStats, fetchManagerStats, fetchSiteStats,
+  type StatsOverview, type ApiChat, type TimelineItem, type RatingsStats,
+  type ManagerStats, type SiteStats,
 } from "@/lib/api"
 import { StatsPDFReport } from "@/components/stats-pdf-report"
+import { TimelineChart, StatusPie, RatingsBar } from "@/components/dashboard-charts"
 import { captureElementToPDF } from "@/lib/pdf-export"
 
 function formatResponseTime(seconds: number | null): string {
@@ -36,32 +44,41 @@ export default function DashboardPage() {
   useRoleGuard(["admin", "rop"])
   const [stats, setStats] = useState<StatsOverview | null>(null)
   const [recentChats, setRecentChats] = useState<ApiChat[]>([])
-  const [sitesCount, setSitesCount] = useState(0)
-  const [managersOnline, setManagersOnline] = useState(0)
-  const [managersTotal, setManagersTotal] = useState(0)
   const [period, setPeriod] = useState("month")
+  const [range, setRange] = useState<DateRange | undefined>()
+  const dateFrom = range?.from ? format(range.from, "yyyy-MM-dd") : ""
+  const dateTo = range?.to ? format(range.to, "yyyy-MM-dd") : ""
   const [timeline, setTimeline] = useState<TimelineItem[]>([])
   const [ratingsStats, setRatingsStats] = useState<RatingsStats | null>(null)
   const [managerStats, setManagerStats] = useState<ManagerStats[]>([])
+  const [siteStats, setSiteStats] = useState<SiteStats[]>([])
   const [exporting, setExporting] = useState(false)
   const [exportError, setExportError] = useState<string | null>(null)
   const [yearlyTimeline, setYearlyTimeline] = useState<TimelineItem[]>([])
   const reportRef = useRef<HTMLDivElement>(null)
 
+  const buildStatsParams = (): Record<string, string> => {
+    if (period === "custom") {
+      const params: Record<string, string> = {}
+      if (dateFrom) params.date_from = dateFrom
+      if (dateTo) params.date_to = dateTo
+      return params
+    }
+    return { period }
+  }
+
   useEffect(() => {
-    fetchStatsOverview({ period }).then(setStats).catch(() => {})
-    fetchStatsTimeline({ period }).then((r) => setTimeline(r.timeline)).catch(() => {})
-    fetchManagerStats({ period }).then(setManagerStats).catch(() => {})
-  }, [period])
+    if (period === "custom" && !dateFrom && !dateTo) return
+    const params = buildStatsParams()
+    fetchStatsOverview(params).then(setStats).catch(() => {})
+    fetchStatsTimeline(params).then((r) => setTimeline(r.timeline)).catch(() => {})
+    fetchManagerStats(params).then(setManagerStats).catch(() => {})
+    fetchSiteStats(params).then(setSiteStats).catch(() => {})
+    fetchRatingsStats(params).then(setRatingsStats).catch(() => {})
+  }, [period, dateFrom, dateTo])
 
   useEffect(() => {
     fetchChats({ page_size: "5" }).then((r) => setRecentChats(r.results)).catch(() => {})
-    fetchSites().then((r) => setSitesCount(r.count)).catch(() => {})
-    fetchUsers().then((r) => {
-      setManagersTotal(r.count)
-      setManagersOnline(r.results.filter((u) => u.is_active).length)
-    }).catch(() => {})
-    fetchRatingsStats().then(setRatingsStats).catch(() => {})
   }, [])
 
   const handleExportPDF = async () => {
@@ -84,7 +101,8 @@ export default function DashboardPage() {
 
       const date = new Date().toLocaleDateString("ru-RU").replace(/\./g, "-")
       await captureElementToPDF(reportRef.current, `statistics-${date}.pdf`)
-    } catch {
+    } catch (err) {
+      console.error("[PDF export]", err)
       setExportError("Не удалось создать PDF. Проверьте консоль.")
     } finally {
       setExporting(false)
@@ -104,18 +122,6 @@ export default function DashboardPage() {
       change: `${stats?.active_chats ?? 0} активных`,
       icon: TrendingUp,
     },
-    {
-      title: "Менеджеры",
-      value: managersOnline,
-      change: `${managersTotal} всего`,
-      icon: Users,
-    },
-    {
-      title: "Подключено сайтов",
-      value: sitesCount,
-      change: ratingsStats?.avg_rating ? `★ ${ratingsStats.avg_rating}` : "",
-      icon: Globe,
-    },
   ]
 
   const totalChats = stats?.total_chats || 1
@@ -126,9 +132,6 @@ export default function DashboardPage() {
     { label: "Закрытые", count: stats?.by_status?.closed ?? 0, color: "bg-slate-400" },
   ]
 
-  // Вычисляем максимум для графика
-  const maxCount = Math.max(1, ...timeline.map((t) => t.count))
-
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
@@ -138,20 +141,75 @@ export default function DashboardPage() {
             Обзор активности вашего чат-сервиса
           </p>
         </div>
-        <div className="flex gap-2">
-          <div className="flex gap-1">
-            {PERIODS.map((p) => (
-              <Button
-                key={p.value}
-                variant={period === p.value ? "default" : "outline"}
-                size="sm"
-                onClick={() => setPeriod(p.value)}
-              >
-                {p.label}
-              </Button>
-            ))}
-          </div>
-          <div className="flex flex-col items-end gap-1">
+        <div className="flex flex-col items-end gap-2">
+          <div className="flex gap-2">
+            <div className="flex gap-1">
+              {PERIODS.map((p) => (
+                <Button
+                  key={p.value}
+                  variant={period === p.value ? "default" : "outline"}
+                  size="sm"
+                  onClick={() => {
+                    setPeriod(p.value)
+                    setRange(undefined)
+                  }}
+                >
+                  {p.label}
+                </Button>
+              ))}
+              <Popover>
+                <PopoverTrigger asChild>
+                  <Button
+                    variant={period === "custom" ? "default" : "outline"}
+                    size="sm"
+                    className={cn(
+                      "gap-2 font-normal",
+                      period !== "custom" && !range?.from && "text-muted-foreground",
+                    )}
+                  >
+                    <CalendarIcon className="size-4" />
+                    {range?.from ? (
+                      range.to ? (
+                        <>
+                          {format(range.from, "d MMM", { locale: ru })} —{" "}
+                          {format(range.to, "d MMM yyyy", { locale: ru })}
+                        </>
+                      ) : (
+                        format(range.from, "d MMM yyyy", { locale: ru })
+                      )
+                    ) : (
+                      "Диапазон"
+                    )}
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-auto p-0" align="end">
+                  <Calendar
+                    mode="range"
+                    selected={range}
+                    onSelect={(r) => {
+                      setRange(r)
+                      if (r?.from) setPeriod("custom")
+                    }}
+                    numberOfMonths={2}
+                    locale={ru}
+                    defaultMonth={range?.from}
+                  />
+                  <div className="flex justify-end gap-2 border-t p-2">
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => {
+                        setRange(undefined)
+                        setPeriod("month")
+                      }}
+                      disabled={!range?.from}
+                    >
+                      Сбросить
+                    </Button>
+                  </div>
+                </PopoverContent>
+              </Popover>
+            </div>
             <Button onClick={handleExportPDF} disabled={exporting} variant="outline" size="sm">
               {exporting ? (
                 <Loader2 className="size-4 mr-2 animate-spin" />
@@ -160,10 +218,10 @@ export default function DashboardPage() {
               )}
               {exporting ? "Экспорт..." : "Экспорт PDF"}
             </Button>
-            {exportError && (
-              <p className="text-xs text-destructive">{exportError}</p>
-            )}
           </div>
+          {exportError && (
+            <p className="text-xs text-destructive">{exportError}</p>
+          )}
         </div>
       </div>
 
@@ -183,6 +241,19 @@ export default function DashboardPage() {
             </CardContent>
           </Card>
         ))}
+        <Card className="md:col-span-2">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm font-medium">Распределение по статусам</CardTitle>
+            <CardDescription className="text-xs">
+              Всего {totalChats === 1 && stats?.total_chats !== 1 ? 0 : totalChats}
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="h-32">
+              <StatusPie rows={statusRows} total={totalChats} />
+            </div>
+          </CardContent>
+        </Card>
       </div>
 
       {/* График динамики обращений */}
@@ -200,84 +271,42 @@ export default function DashboardPage() {
               Нет данных за выбранный период
             </p>
           ) : (
-            <div className="flex items-end gap-1 h-40">
-              {timeline.map((item) => (
-                <div
-                  key={item.date}
-                  className="flex-1 flex flex-col items-center gap-1"
-                >
-                  <span className="text-xs text-muted-foreground">{item.count}</span>
-                  <div
-                    className="w-full bg-primary/80 rounded-t-sm min-h-[4px] transition-all"
-                    style={{ height: `${(item.count / maxCount) * 100}%` }}
-                  />
-                  <span className="text-[10px] text-muted-foreground">
-                    {new Date(item.date).toLocaleDateString("ru-RU", { day: "numeric", month: "short" })}
-                  </span>
-                </div>
-              ))}
+            <div className="h-64">
+              <TimelineChart data={timeline} />
             </div>
           )}
         </CardContent>
       </Card>
 
-      <div className="grid gap-4 md:grid-cols-2">
-        <Card>
-          <CardHeader>
-            <CardTitle>Последние чаты</CardTitle>
-            <CardDescription>Недавние входящие сообщения</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-4">
-              {recentChats.length === 0 && (
-                <p className="text-sm text-muted-foreground">Нет чатов</p>
-              )}
-              {recentChats.map((chat) => (
-                <div key={chat.id} className="flex items-center gap-4">
-                  <div className="flex size-9 items-center justify-center rounded-full bg-primary/10 text-primary text-sm font-medium">
-                    {(chat.client_name || "?").split(" ").map((n) => n[0]).join("").toUpperCase().slice(0, 2)}
-                  </div>
-                  <div className="flex-1 space-y-1">
-                    <p className="text-sm font-medium leading-none">{chat.client_name || "Без имени"}</p>
-                    <p className="text-sm text-muted-foreground line-clamp-1">
-                      {chat.last_message?.content || "Нет сообщений"}
-                    </p>
-                  </div>
-                  <div className="text-xs text-muted-foreground">
-                    {chat.channel === "telegram" ? "TG" : "Web"}
-                  </div>
+      <Card>
+        <CardHeader>
+          <CardTitle>Последние чаты</CardTitle>
+          <CardDescription>Недавние входящие сообщения</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="grid gap-x-6 gap-y-4 md:grid-cols-2">
+            {recentChats.length === 0 && (
+              <p className="text-sm text-muted-foreground">Нет чатов</p>
+            )}
+            {recentChats.map((chat) => (
+              <div key={chat.id} className="flex items-center gap-4">
+                <div className="flex size-9 items-center justify-center rounded-full bg-primary/10 text-primary text-sm font-medium">
+                  {(chat.client_name || "?").split(" ").map((n) => n[0]).join("").toUpperCase().slice(0, 2)}
                 </div>
-              ))}
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader>
-            <CardTitle>Статистика по статусам</CardTitle>
-            <CardDescription>Распределение чатов</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-4">
-              {statusRows.map((item) => (
-                <div key={item.label} className="flex items-center gap-4">
-                  <div className={`size-3 rounded-full ${item.color}`} />
-                  <div className="flex-1">
-                    <p className="text-sm font-medium">{item.label}</p>
-                  </div>
-                  <div className="text-sm font-medium">{item.count}</div>
-                  <div className="w-24 h-2 bg-muted rounded-full overflow-hidden">
-                    <div
-                      className={`h-full ${item.color} transition-all`}
-                      style={{ width: `${(item.count / totalChats) * 100}%` }}
-                    />
-                  </div>
+                <div className="flex-1 space-y-1 min-w-0">
+                  <p className="text-sm font-medium leading-none truncate">{chat.client_name || "Без имени"}</p>
+                  <p className="text-sm text-muted-foreground line-clamp-1">
+                    {chat.last_message?.content || "Нет сообщений"}
+                  </p>
                 </div>
-              ))}
-            </div>
-          </CardContent>
-        </Card>
-      </div>
+                <div className="text-xs text-muted-foreground">
+                  {chat.channel === "email" ? "Mail" : "Web"}
+                </div>
+              </div>
+            ))}
+          </div>
+        </CardContent>
+      </Card>
 
       {/* Статистика по менеджерам */}
       {managerStats.length > 0 && (
@@ -354,6 +383,78 @@ export default function DashboardPage() {
         </Card>
       )}
 
+      {/* Статистика по сайтам */}
+      {siteStats.length > 0 && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Globe className="size-5" />
+              Статистика по сайтам
+            </CardTitle>
+            <CardDescription>Активность по каждому подключённому сайту</CardDescription>
+          </CardHeader>
+          <CardContent className="p-0">
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b bg-muted/40">
+                    <th className="text-left px-4 py-3 font-medium text-muted-foreground">Сайт</th>
+                    <th className="text-center px-4 py-3 font-medium text-muted-foreground">
+                      <span className="flex items-center justify-center gap-1">
+                        <MessageSquare className="size-3.5" />
+                        Всего
+                      </span>
+                    </th>
+                    <th className="text-center px-4 py-3 font-medium text-muted-foreground">Активных</th>
+                    <th className="text-center px-4 py-3 font-medium text-muted-foreground">
+                      <span className="flex items-center justify-center gap-1">
+                        <CheckCircle2 className="size-3.5" />
+                        Закрыто
+                      </span>
+                    </th>
+                    <th className="text-center px-4 py-3 font-medium text-muted-foreground">
+                      <span className="flex items-center justify-center gap-1">
+                        <Clock className="size-3.5" />
+                        Скорость ответа
+                      </span>
+                    </th>
+                    <th className="text-center px-4 py-3 font-medium text-muted-foreground">Оценка</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {siteStats.map((s, i) => (
+                    <tr key={s.id} className={i % 2 === 0 ? "bg-background" : "bg-muted/20"}>
+                      <td className="px-4 py-3">
+                        <div className="font-medium">{s.name}</div>
+                        <div className="text-xs text-muted-foreground truncate max-w-65">{s.url}</div>
+                      </td>
+                      <td className="px-4 py-3 text-center font-semibold">{s.total_chats}</td>
+                      <td className="px-4 py-3 text-center text-muted-foreground">{s.active_chats}</td>
+                      <td className="px-4 py-3 text-center">{s.closed_chats}</td>
+                      <td className="px-4 py-3 text-center">
+                        <span className={s.avg_response_time === null ? "text-muted-foreground" : s.avg_response_time <= 300 ? "text-emerald-600 font-medium" : s.avg_response_time <= 1800 ? "text-amber-600 font-medium" : "text-red-500 font-medium"}>
+                          {formatResponseTime(s.avg_response_time)}
+                        </span>
+                      </td>
+                      <td className="px-4 py-3 text-center">
+                        {s.avg_rating ? (
+                          <span className="flex items-center justify-center gap-1">
+                            <Star className="size-3.5 fill-amber-400 text-amber-400" />
+                            <span className="font-medium">{s.avg_rating}</span>
+                          </span>
+                        ) : (
+                          <span className="text-muted-foreground">—</span>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
       {/* Оценки */}
       {ratingsStats && ratingsStats.total_ratings > 0 && (
         <Card>
@@ -367,27 +468,8 @@ export default function DashboardPage() {
             </CardDescription>
           </CardHeader>
           <CardContent>
-            <div className="space-y-2">
-              {[5, 4, 3, 2, 1].map((rating) => {
-                const count = ratingsStats.distribution[String(rating)] ?? 0
-                const pct = ratingsStats.total_ratings > 0
-                  ? (count / ratingsStats.total_ratings) * 100
-                  : 0
-                return (
-                  <div key={rating} className="flex items-center gap-3">
-                    <span className="text-sm w-8">{rating} ★</span>
-                    <div className="flex-1 h-3 bg-muted rounded-full overflow-hidden">
-                      <div
-                        className="h-full bg-amber-400 rounded-full transition-all"
-                        style={{ width: `${pct}%` }}
-                      />
-                    </div>
-                    <span className="text-sm text-muted-foreground w-12 text-right">
-                      {count}
-                    </span>
-                  </div>
-                )
-              })}
+            <div className="h-56">
+              <RatingsBar distribution={ratingsStats.distribution} />
             </div>
           </CardContent>
         </Card>
@@ -402,6 +484,7 @@ export default function DashboardPage() {
         <StatsPDFReport
           stats={stats}
           managerStats={managerStats}
+          siteStats={siteStats}
           monthlyTimeline={timeline}
           yearlyTimeline={yearlyTimeline}
           ratingsStats={ratingsStats}

@@ -1,11 +1,25 @@
 import React from "react"
 import type { Metadata } from 'next'
+import { Montserrat, JetBrains_Mono } from 'next/font/google'
 import { Analytics } from '@vercel/analytics/next'
 import './globals.css'
 
+const montserrat = Montserrat({
+  subsets: ['latin', 'cyrillic'],
+  variable: '--font-montserrat',
+  display: 'swap',
+  weight: ['300', '400', '500', '600', '700', '800'],
+})
+
+const jetbrainsMono = JetBrains_Mono({
+  subsets: ['latin'],
+  variable: '--font-jetbrains-mono',
+  display: 'swap',
+})
+
 export const metadata: Metadata = {
   title: 'MultiChat Hub - Unified Chat Module',
-  description: 'Интегрируемый чат для сайтов и Telegram. Управляйте всеми сообщениями в одном месте.',
+  description: 'Интегрируемый чат для сайтов. Управляйте всеми сообщениями в одном месте.',
   // generator: 'v0.app',
   // icons: {
   //   icon: [
@@ -33,7 +47,7 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en" suppressHydrationWarning>
-      <body className={`font-sans antialiased`}>
+      <body className={`${montserrat.variable} ${jetbrainsMono.variable} font-sans antialiased`}>
         {children}
         <Analytics />
       </body>

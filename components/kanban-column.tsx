@@ -4,8 +4,8 @@ import { useDroppable } from "@dnd-kit/core"
 import { SortableContext, verticalListSortingStrategy } from "@dnd-kit/sortable"
 
 import { cn } from "@/lib/utils"
-import type { Chat, ChatStatus } from "@/lib/mock-data"
-import { getStatusLabel } from "@/lib/mock-data"
+import type { Chat, ChatStatus } from "@/lib/chat-types"
+import { getStatusLabel } from "@/lib/chat-types"
 import { ChatCard } from "./chat-card"
 
 interface KanbanColumnProps {

@@ -1,7 +1,8 @@
 "use client"
 
+import Link from "next/link"
 import { useState, useEffect, useRef, useCallback } from "react"
-import { Globe, Send, Paperclip, Smile, Phone, User, Building2, FileText, X, Download, GitMerge, Search, Loader2 } from "lucide-react"
+import { Globe, Send, Paperclip, Smile, Phone, User, Building2, FileText, X, Download, Mail, ExternalLink } from "lucide-react"
 
 import {
   Sheet,
@@ -9,18 +10,10 @@ import {
   SheetHeader,
   SheetTitle,
 } from "@/components/ui/sheet"
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogDescription,
-} from "@/components/ui/dialog"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import { ScrollArea } from "@/components/ui/scroll-area"
 import { Separator } from "@/components/ui/separator"
 import {
   DropdownMenu,
@@ -35,8 +28,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
-import type { Chat, Message, MessageFile } from "@/lib/mock-data"
-import { quickReplies, formatRelativeTime } from "@/lib/mock-data"
+import type { Chat, Message, MessageFile } from "@/lib/chat-types"
+import { formatRelativeTime } from "@/lib/chat-types"
 import { cn } from "@/lib/utils"
 import {
   fetchMessages,
@@ -44,8 +37,9 @@ import {
   connectChatWS,
   fetchUsers,
   assignChat,
-  mergeChats,
+  fetchTemplates,
   type ApiManager,
+  type ApiTemplate,
 } from "@/lib/api"
 import { apiMessageToMessage } from "@/lib/adapters"
 
@@ -61,20 +55,16 @@ interface ChatDetailProps {
   open: boolean
   onClose: () => void
   onChatUpdate?: (chatId: string, updates: Partial<Chat>) => void
-  allChats?: Chat[]
-  onChatMerged?: (deletedChatId: string) => void
 }
 
-export function ChatDetail({ chat, open, onClose, onChatUpdate, allChats = [], onChatMerged }: ChatDetailProps) {
+export function ChatDetail({ chat, open, onClose, onChatUpdate }: ChatDetailProps) {
   const [message, setMessage] = useState("")
   const [messages, setMessages] = useState<Message[]>([])
   const [pendingFiles, setPendingFiles] = useState<File[]>([])
   const [managers, setManagers] = useState<ApiManager[]>([])
+  const [templates, setTemplates] = useState<ApiTemplate[]>([])
   const [assignedManagerId, setAssignedManagerId] = useState<string>("")
   const [assignedManagerName, setAssignedManagerName] = useState<string | null>(null)
-  const [mergeDialogOpen, setMergeDialogOpen] = useState(false)
-  const [mergeSearch, setMergeSearch] = useState("")
-  const [mergeLoading, setMergeLoading] = useState(false)
   const wsRef = useRef<WebSocket | null>(null)
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const messagesContainerRef = useRef<HTMLDivElement>(null)
@@ -95,6 +85,22 @@ export function ChatDetail({ chat, open, onClose, onChatUpdate, allChats = [], o
       .then((res) => setManagers(res.results))
       .catch(() => {})
   }, [open])
+
+  // Load site-specific templates when chat changes
+  useEffect(() => {
+    if (!chat || !open) {
+      setTemplates([])
+      return
+    }
+    const siteId = Number(chat.siteId)
+    if (!siteId) {
+      setTemplates([])
+      return
+    }
+    fetchTemplates({ site: siteId })
+      .then((res) => setTemplates(res.results))
+      .catch(() => setTemplates([]))
+  }, [chat?.id, chat?.siteId, open])
 
   // Загружаем сообщения из API при открытии чата
   useEffect(() => {
@@ -185,6 +191,25 @@ export function ChatDetail({ chat, open, onClose, onChatUpdate, allChats = [], o
     }
   }, [message, pendingFiles, chat])
 
+  const handleSendTemplate = useCallback(async (text: string) => {
+    if (!chat || !text.trim()) return
+    const chatId = Number(chat.id)
+    if (isNaN(chatId)) return
+    try {
+      const apiMsg = await sendMessageWithFiles(chatId, text, [])
+      const newMsg = apiMessageToMessage(apiMsg)
+      setMessages((prev) => {
+        if (prev.some((m) => m.id === newMsg.id)) return prev
+        return [...prev, newMsg]
+      })
+    } catch {
+      setMessages((prev) => [
+        ...prev,
+        { id: String(Date.now()), content: text, sender: "manager", timestamp: new Date() },
+      ])
+    }
+  }, [chat])
+
   const handleAssignManager = useCallback(async (value: string) => {
     if (!chat) return
     const chatId = Number(chat.id)
@@ -222,33 +247,7 @@ export function ChatDetail({ chat, open, onClose, onChatUpdate, allChats = [], o
     setPendingFiles((prev) => prev.filter((_, i) => i !== index))
   }
 
-  const handleMerge = async (targetChat: Chat) => {
-    if (!chat) return
-    const sourceId = Number(chat.id)
-    const targetId = Number(targetChat.id)
-    if (isNaN(sourceId) || isNaN(targetId)) return
-    setMergeLoading(true)
-    try {
-      await mergeChats(sourceId, targetId)
-      setMergeDialogOpen(false)
-      onChatMerged?.(chat.id)
-      onClose()
-    } catch {
-      // ошибка объединения
-    } finally {
-      setMergeLoading(false)
-    }
-  }
-
   if (!chat) return null
-
-  const otherChats = allChats.filter((c) => c.id !== chat.id)
-  const filteredChats = mergeSearch.trim()
-    ? otherChats.filter((c) =>
-        c.clientName.toLowerCase().includes(mergeSearch.toLowerCase()) ||
-        c.lastMessage.toLowerCase().includes(mergeSearch.toLowerCase())
-      )
-    : otherChats
 
   const initials = chat.clientName
     .split(" ")
@@ -271,41 +270,31 @@ export function ChatDetail({ chat, open, onClose, onChatUpdate, allChats = [], o
             <div className="flex-1 min-w-0">
               <div className="flex items-center justify-between gap-2 pr-8">
                 <SheetTitle className="text-left">{chat.clientName}</SheetTitle>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="shrink-0 h-7 text-xs gap-1.5"
-                  onClick={() => { setMergeSearch(""); setMergeDialogOpen(true) }}
-                  title="Объединить с другой заявкой"
-                >
-                  <GitMerge className="size-3.5" />
-                  Объединить
-                </Button>
               </div>
-              <div className="flex items-center gap-2 mt-1">
-                <Badge
-                  variant={chat.source === "telegram" ? "default" : "secondary"}
-                  className="text-xs"
-                >
-                  {chat.source === "telegram" ? (
-                    <Send className="size-3 mr-1" />
+              <div className="flex items-center gap-2 mt-1 flex-wrap">
+                <Badge variant="secondary" className="text-xs gap-1">
+                  {chat.source === "email" ? (
+                    <Mail className="size-3" />
                   ) : (
-                    <Globe className="size-3 mr-1" />
+                    <Globe className="size-3" />
                   )}
-                  {chat.source === "telegram" ? "Telegram" : (chat.siteName || "Сайт")}
+                  {chat.source === "email" ? "Email" : "Виджет"}
                 </Badge>
+                {chat.contactId && (
+                  <Link
+                    href={`/contacts/${chat.contactId}`}
+                    className="inline-flex items-center gap-1 text-xs text-primary hover:underline"
+                  >
+                    <ExternalLink className="size-3" />
+                    Карточка клиента
+                  </Link>
+                )}
               </div>
               <div className="flex items-center gap-4 mt-2 text-xs text-muted-foreground">
                 {chat.clientPhone && (
                   <span className="flex items-center gap-1">
                     <Phone className="size-3" />
                     {chat.clientPhone}
-                  </span>
-                )}
-                {chat.clientTelegram && (
-                  <span className="flex items-center gap-1">
-                    <User className="size-3" />
-                    {chat.clientTelegram}
                   </span>
                 )}
               </div>
@@ -345,39 +334,45 @@ export function ChatDetail({ chat, open, onClose, onChatUpdate, allChats = [], o
         </SheetHeader>
 
         {/* Quick Replies */}
-        <div className="flex gap-2 p-3 border-b overflow-x-auto">
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button variant="outline" size="sm" className="shrink-0 bg-transparent">
-                Быстрые ответы
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="start" className="w-64">
-              {quickReplies.map((reply, index) => (
-                <DropdownMenuItem
-                  key={index}
-                  onClick={() => setMessage(reply)}
-                  className="text-xs"
+        {templates.length > 0 && (
+          <div className="flex gap-2 p-3 border-b overflow-x-auto">
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="outline" size="sm" className="shrink-0 bg-transparent">
+                  Быстрые ответы
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="start" className="w-72">
+                {templates.map((t) => (
+                  <DropdownMenuItem
+                    key={t.id}
+                    onClick={() => handleSendTemplate(t.content)}
+                    className="flex flex-col items-start gap-0.5"
+                  >
+                    <span className="text-xs font-medium">{t.title}</span>
+                    <span className="text-[11px] text-muted-foreground line-clamp-1">
+                      {t.content}
+                    </span>
+                  </DropdownMenuItem>
+                ))}
+              </DropdownMenuContent>
+            </DropdownMenu>
+            <div className="flex gap-1.5 overflow-x-auto">
+              {templates.slice(0, 3).map((t) => (
+                <Button
+                  key={t.id}
+                  variant="secondary"
+                  size="sm"
+                  className="text-xs whitespace-nowrap shrink-0"
+                  onClick={() => handleSendTemplate(t.content)}
+                  title={t.content}
                 >
-                  {reply}
-                </DropdownMenuItem>
+                  {t.title.length > 25 ? `${t.title.slice(0, 25)}...` : t.title}
+                </Button>
               ))}
-            </DropdownMenuContent>
-          </DropdownMenu>
-          <div className="flex gap-1.5 overflow-x-auto">
-            {quickReplies.slice(0, 3).map((reply, index) => (
-              <Button
-                key={index}
-                variant="secondary"
-                size="sm"
-                className="text-xs whitespace-nowrap shrink-0"
-                onClick={() => setMessage(reply)}
-              >
-                {reply.length > 25 ? `${reply.slice(0, 25)}...` : reply}
-              </Button>
-            ))}
+            </div>
           </div>
-        </div>
+        )}
 
         {/* Messages */}
         <div ref={messagesContainerRef} className="flex-1 overflow-y-auto p-4">
@@ -500,67 +495,7 @@ export function ChatDetail({ chat, open, onClose, onChatUpdate, allChats = [], o
       </SheetContent>
     </Sheet>
 
-    {/* Диалог объединения чатов */}
-    <Dialog open={mergeDialogOpen} onOpenChange={setMergeDialogOpen}>
-      <DialogContent className="sm:max-w-md">
-        <DialogHeader>
-          <DialogTitle className="flex items-center gap-2">
-            <GitMerge className="size-4" />
-            Объединить заявку
-          </DialogTitle>
-          <DialogDescription>
-            Все сообщения из <strong>{chat.clientName}</strong> будут перенесены в выбранную заявку.
-            Текущая заявка будет удалена.
-          </DialogDescription>
-        </DialogHeader>
-
-        <div className="relative">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
-          <Input
-            placeholder="Поиск по имени или сообщению..."
-            value={mergeSearch}
-            onChange={(e) => setMergeSearch(e.target.value)}
-            className="pl-9"
-          />
-        </div>
-
-        <ScrollArea className="max-h-72">
-          {filteredChats.length === 0 ? (
-            <p className="text-sm text-muted-foreground text-center py-6">
-              {mergeSearch ? "Ничего не найдено" : "Нет других заявок"}
-            </p>
-          ) : (
-            <div className="space-y-1 pr-2">
-              {filteredChats.map((c) => {
-                const ci = c.clientName.split(" ").map((n) => n[0]).join("").toUpperCase().slice(0, 2)
-                return (
-                  <button
-                    key={c.id}
-                    disabled={mergeLoading}
-                    onClick={() => handleMerge(c)}
-                    className="w-full flex items-center gap-3 p-2.5 rounded-lg hover:bg-muted text-left transition-colors disabled:opacity-50"
-                  >
-                    <div className="size-8 shrink-0 rounded-full bg-primary/10 text-primary text-xs font-medium flex items-center justify-center">
-                      {ci}
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium truncate">{c.clientName}</p>
-                      <p className="text-xs text-muted-foreground truncate">{c.lastMessage || "Нет сообщений"}</p>
-                    </div>
-                    {mergeLoading ? (
-                      <Loader2 className="size-4 shrink-0 animate-spin text-muted-foreground" />
-                    ) : (
-                      <GitMerge className="size-4 shrink-0 text-muted-foreground" />
-                    )}
-                  </button>
-                )
-              })}
-            </div>
-          )}
-        </ScrollArea>
-      </DialogContent>
-    </Dialog>
-    </>
+</>
   )
 }
 

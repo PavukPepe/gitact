@@ -63,9 +63,13 @@ export function AppHeader() {
               </div>
             </DropdownMenuLabel>
             <DropdownMenuSeparator />
-            <DropdownMenuItem onClick={() => router.push("/settings")}>Профиль</DropdownMenuItem>
-            <DropdownMenuItem onClick={() => router.push("/settings")}>Настройки</DropdownMenuItem>
-            <DropdownMenuSeparator />
+            {user?.role !== "manager" && (
+              <>
+                <DropdownMenuItem onClick={() => router.push("/settings")}>Профиль</DropdownMenuItem>
+                <DropdownMenuItem onClick={() => router.push("/settings")}>Настройки</DropdownMenuItem>
+                <DropdownMenuSeparator />
+              </>
+            )}
             <DropdownMenuItem className="text-destructive" onClick={logout}>
               Выйти
             </DropdownMenuItem>

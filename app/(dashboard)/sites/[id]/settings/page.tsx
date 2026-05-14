@@ -4,8 +4,9 @@ import React from "react"
 import { useState, useEffect, useRef } from "react"
 import { useParams } from "next/navigation"
 import {
-  ArrowLeft, Save, Bot, Palette, MessageSquare, Send,
+  ArrowLeft, Save, Palette, MessageSquare,
   Smartphone, Monitor, GripVertical, Clock, Reply, Link2, Copy, Check,
+  Plus, Trash2, Pencil, X,
 } from "lucide-react"
 import Link from "next/link"
 
@@ -26,7 +27,11 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
-import { fetchSite, updateSite, setupTelegram, fetchWidgetCode, type ApiSite } from "@/lib/api"
+import {
+  fetchSite, updateSite, fetchWidgetCode,
+  fetchTemplates, createTemplate, updateTemplate, deleteTemplate,
+  type ApiSite, type ApiTemplate,
+} from "@/lib/api"
 
 const defaultDesktop = {
   primaryColor: "#3b82f6",
@@ -68,8 +73,6 @@ export default function SiteSettingsPage() {
   const [desktop, setDesktop] = useState(defaultDesktop)
   // Widget settings — mobile
   const [mobile, setMobile] = useState(defaultMobile)
-  // Extra
-  const [requireTelegram, setRequireTelegram] = useState(false)
 
   // Working hours
   const [workingHours, setWorkingHours] = useState({
@@ -82,17 +85,18 @@ export default function SiteSettingsPage() {
   const [autoReplyEnabled, setAutoReplyEnabled] = useState(false)
   const [autoReplyMessage, setAutoReplyMessage] = useState("")
 
-  // Telegram
-  const [botToken, setBotToken] = useState("")
-  const [isConnected, setIsConnected] = useState(false)
-  const [botUsername, setBotUsername] = useState("")
-  const [referralLink, setReferralLink] = useState("")
-  const [connectingBot, setConnectingBot] = useState(false)
-
-  const [botError, setBotError] = useState("")
+  // Email channel
+  const [emailEnabled, setEmailEnabled] = useState(false)
+  const [emailImapHost, setEmailImapHost] = useState("imap.mail.ru")
+  const [emailImapPort, setEmailImapPort] = useState(993)
+  const [emailImapUser, setEmailImapUser] = useState("")
+  const [emailImapPassword, setEmailImapPassword] = useState("")
+  const [emailSmtpHost, setEmailSmtpHost] = useState("smtp.mail.ru")
+  const [emailSmtpPort, setEmailSmtpPort] = useState(465)
+  const [emailSaving, setEmailSaving] = useState(false)
+  const [emailSaved, setEmailSaved] = useState(false)
   const [isDragging, setIsDragging] = useState(false)
   const [previewMode, setPreviewMode] = useState<"desktop" | "mobile">("desktop")
-  const [copiedLink, setCopiedLink] = useState(false)
   const [embedCode, setEmbedCode] = useState("")
   const [copiedEmbed, setCopiedEmbed] = useState(false)
 
@@ -131,10 +135,6 @@ export default function SiteSettingsPage() {
           offsetY: sanitizeOffset(ws.mobile.offsetY, defaultMobile.offsetY),
         })
       }
-      if (ws.requireTelegram !== undefined) {
-        setRequireTelegram(ws.requireTelegram)
-      }
-
       // Working hours
       const wh = data.working_hours || {}
       if (wh.start || wh.end) {
@@ -149,9 +149,13 @@ export default function SiteSettingsPage() {
       setAutoReplyEnabled(data.auto_reply_enabled)
       setAutoReplyMessage(data.auto_reply_message || "")
 
-      // Telegram
-      setBotToken(data.telegram_bot_token || "")
-      setIsConnected(!!data.telegram_bot_token)
+      // Email
+      setEmailEnabled(data.email_enabled ?? false)
+      setEmailImapHost(data.email_imap_host || "imap.mail.ru")
+      setEmailImapPort(data.email_imap_port || 993)
+      setEmailImapUser(data.email_imap_user || "")
+      setEmailSmtpHost(data.email_smtp_host || "smtp.mail.ru")
+      setEmailSmtpPort(data.email_smtp_port || 465)
 
       // Embed code
       try {
@@ -184,12 +188,10 @@ export default function SiteSettingsPage() {
         widget_settings: {
           desktop,
           mobile,
-          requireTelegram,
         } as Record<string, unknown>,
         working_hours: workingHours as Record<string, unknown>,
         auto_reply_enabled: autoReplyEnabled,
         auto_reply_message: autoReplyMessage,
-        telegram_bot_token: botToken,
       })
       setSaved(true)
       setTimeout(() => setSaved(false), 2000)
@@ -197,49 +199,6 @@ export default function SiteSettingsPage() {
       // ошибка сохранения
     } finally {
       setSaving(false)
-    }
-  }
-
-  const handleConnectBot = async () => {
-    if (!botToken.trim()) return
-    setBotError("")
-    setConnectingBot(true)
-    try {
-      // Сначала сохраняем токен
-      await updateSite(siteId, { telegram_bot_token: botToken })
-      // Затем регистрируем webhook
-      const result = await setupTelegram(siteId)
-      if (result.ok) {
-        setIsConnected(true)
-        setBotUsername(result.bot_username || "")
-        setReferralLink(result.referral_link || "")
-      }
-    } catch (err: unknown) {
-      const e = err as { detail?: string }
-      const msg = e?.detail || "Ошибка подключения. Проверьте токен бота."
-      setBotError(msg)
-    } finally {
-      setConnectingBot(false)
-    }
-  }
-
-  const handleDisconnectBot = async () => {
-    try {
-      await updateSite(siteId, { telegram_bot_token: "" })
-      setBotToken("")
-      setIsConnected(false)
-      setBotUsername("")
-      setReferralLink("")
-    } catch {
-      // ошибка отключения
-    }
-  }
-
-  const handleCopyReferralLink = () => {
-    if (referralLink) {
-      navigator.clipboard.writeText(referralLink)
-      setCopiedLink(true)
-      setTimeout(() => setCopiedLink(false), 2000)
     }
   }
 
@@ -312,14 +271,18 @@ export default function SiteSettingsPage() {
       </div>
 
       <Tabs defaultValue="widget" className="space-y-6">
-        <TabsList className="grid w-full grid-cols-2 lg:w-100">
+        <TabsList className="grid w-full grid-cols-3 lg:w-auto">
           <TabsTrigger value="widget" className="gap-2">
             <Palette className="size-4" />
             Виджет
           </TabsTrigger>
-          <TabsTrigger value="telegram" className="gap-2">
-            <Send className="size-4" />
-            Telegram
+          <TabsTrigger value="email" className="gap-2">
+            <Link2 className="size-4" />
+            Email
+          </TabsTrigger>
+          <TabsTrigger value="templates" className="gap-2">
+            <Reply className="size-4" />
+            Шаблоны
           </TabsTrigger>
         </TabsList>
 
@@ -426,19 +389,6 @@ export default function SiteSettingsPage() {
                     id="buttonText"
                     value={desktop.buttonText}
                     onChange={(e) => setDesktop({ ...desktop, buttonText: e.target.value })}
-                  />
-                </div>
-                <Separator />
-                <div className="flex items-center justify-between">
-                  <div className="space-y-0.5">
-                    <Label>Обязательный Telegram</Label>
-                    <p className="text-sm text-muted-foreground">
-                      Требовать Telegram-никнейм от клиента
-                    </p>
-                  </div>
-                  <Switch
-                    checked={requireTelegram}
-                    onCheckedChange={setRequireTelegram}
                   />
                 </div>
               </CardContent>
@@ -830,92 +780,283 @@ export default function SiteSettingsPage() {
           </div>
         </TabsContent>
 
-        {/* Telegram Settings Tab */}
-        <TabsContent value="telegram" className="space-y-6">
+        {/* Email Settings Tab */}
+        <TabsContent value="email" className="space-y-6">
           <div className="grid gap-6 lg:grid-cols-2">
-            {/* Bot Connection */}
             <Card>
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
-                  <Bot className="size-5" />
-                  Подключение бота
+                  <Link2 className="size-5" />
+                  Email-канал
                 </CardTitle>
-                <CardDescription>Подключите Telegram бота для этого сайта</CardDescription>
+                <CardDescription>
+                  Подключите почтовый ящик (mail.ru или другой) для получения писем от клиентов.
+                  Входящие письма будут автоматически создавать лиды в системе.
+                </CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
-                <div className="space-y-2">
-                  <Label htmlFor="botToken">Bot Token</Label>
-                  <Input
-                    id="botToken"
-                    type="password"
-                    value={botToken}
-                    onChange={(e) => setBotToken(e.target.value)}
-                    placeholder="123456789:ABCdefGHIjklMNOpqrsTUVwxyz"
-                    disabled={isConnected}
-                  />
+                <div className="flex items-center justify-between">
+                  <div>
+                    <Label>Включить email-канал</Label>
+                    <p className="text-xs text-muted-foreground mt-0.5">Опрос ящика каждую минуту</p>
+                  </div>
+                  <Switch checked={emailEnabled} onCheckedChange={setEmailEnabled} />
+                </div>
+
+                <Separator />
+
+                <p className="text-sm font-medium">IMAP (входящие)</p>
+                <div className="grid grid-cols-3 gap-3">
+                  <div className="col-span-2 space-y-1">
+                    <Label className="text-xs">Хост</Label>
+                    <Input value={emailImapHost} onChange={e => setEmailImapHost(e.target.value)} placeholder="imap.mail.ru" />
+                  </div>
+                  <div className="space-y-1">
+                    <Label className="text-xs">Порт</Label>
+                    <Input type="number" value={emailImapPort} onChange={e => setEmailImapPort(Number(e.target.value))} />
+                  </div>
+                </div>
+                <div className="space-y-1">
+                  <Label className="text-xs">Логин (email)</Label>
+                  <Input type="email" value={emailImapUser} onChange={e => setEmailImapUser(e.target.value)} placeholder="support@mail.ru" />
+                </div>
+                <div className="space-y-1">
+                  <Label className="text-xs">Пароль приложения</Label>
+                  <Input type="password" value={emailImapPassword} onChange={e => setEmailImapPassword(e.target.value)} placeholder="Пароль от внешнего приложения" />
                   <p className="text-xs text-muted-foreground">
-                    Получите токен у @BotFather в Telegram
+                    Для mail.ru: Настройки → Безопасность → Пароль для внешних приложений
                   </p>
                 </div>
-                <div className="flex items-center gap-2">
-                  <span className="text-sm">Статус:</span>
-                  <Badge variant={isConnected ? "default" : "secondary"}>
-                    {isConnected ? "Подключён" : "Не подключён"}
-                  </Badge>
+
+                <Separator />
+
+                <p className="text-sm font-medium">SMTP (исходящие)</p>
+                <div className="grid grid-cols-3 gap-3">
+                  <div className="col-span-2 space-y-1">
+                    <Label className="text-xs">Хост</Label>
+                    <Input value={emailSmtpHost} onChange={e => setEmailSmtpHost(e.target.value)} placeholder="smtp.mail.ru" />
+                  </div>
+                  <div className="space-y-1">
+                    <Label className="text-xs">Порт</Label>
+                    <Input type="number" value={emailSmtpPort} onChange={e => setEmailSmtpPort(Number(e.target.value))} />
+                  </div>
                 </div>
-                {isConnected && botUsername && (
-                  <div className="flex items-center gap-2">
-                    <span className="text-sm">Бот:</span>
-                    <span className="text-sm font-medium">@{botUsername}</span>
-                  </div>
-                )}
-                {isConnected && referralLink && (
-                  <div className="space-y-2">
-                    <Label>Реферальная ссылка</Label>
-                    <div className="flex items-center gap-2">
-                      <Input value={referralLink} readOnly className="text-xs" />
-                      <Button variant="outline" size="icon" onClick={handleCopyReferralLink}>
-                        {copiedLink ? <Check className="size-4" /> : <Copy className="size-4" />}
-                      </Button>
-                    </div>
-                    <p className="text-xs text-muted-foreground">
-                      Клиенты могут перейти по этой ссылке для начала чата
-                    </p>
-                  </div>
-                )}
+
                 <Button
                   className="w-full"
-                  variant={isConnected ? "outline" : "default"}
-                  onClick={isConnected ? handleDisconnectBot : handleConnectBot}
-                  disabled={connectingBot || (!isConnected && !botToken.trim())}
+                  disabled={emailSaving}
+                  onClick={async () => {
+                    setEmailSaving(true)
+                    try {
+                      const payload: Record<string, unknown> = {
+                        email_enabled: emailEnabled,
+                        email_imap_host: emailImapHost,
+                        email_imap_port: emailImapPort,
+                        email_imap_user: emailImapUser,
+                        email_smtp_host: emailSmtpHost,
+                        email_smtp_port: emailSmtpPort,
+                      }
+                      if (emailImapPassword) payload.email_imap_password = emailImapPassword
+                      await updateSite(siteId, payload)
+                      setEmailSaved(true)
+                      setTimeout(() => setEmailSaved(false), 2000)
+                    } catch { /* ошибка */ } finally { setEmailSaving(false) }
+                  }}
                 >
-                  {connectingBot ? "Подключение..." : isConnected ? "Отключить бота" : "Подключить бота"}
+                  {emailSaved ? "Сохранено!" : emailSaving ? "Сохранение..." : "Сохранить email-настройки"}
                 </Button>
-                {botError && (
-                  <p className="text-sm text-destructive">{botError}</p>
-                )}
               </CardContent>
             </Card>
 
-            {/* Instructions */}
             <Card>
               <CardHeader>
-                <CardTitle>Как подключить Telegram бота</CardTitle>
+                <CardTitle>Как подключить mail.ru</CardTitle>
               </CardHeader>
               <CardContent>
                 <ol className="list-decimal list-inside space-y-2 text-sm text-muted-foreground">
-                  <li>Откройте Telegram и найдите @BotFather</li>
-                  <li>Отправьте команду /newbot и следуйте инструкциям</li>
-                  <li>Скопируйте полученный токен и вставьте его в поле выше</li>
-                  <li>Нажмите кнопку &quot;Подключить бота&quot;</li>
-                  <li>Скопируйте реферальную ссылку и разместите на сайте</li>
-                  <li>Готово! Сообщения из Telegram будут приходить в панель менеджера</li>
+                  <li>Войдите в почту mail.ru</li>
+                  <li>Перейдите в <strong>Настройки → Безопасность</strong></li>
+                  <li>В разделе «Пароль для внешних приложений» создайте новый пароль</li>
+                  <li>Включите IMAP в <strong>Настройки → Все настройки → Почтовые программы</strong></li>
+                  <li>Вставьте логин и пароль приложения в поля выше</li>
+                  <li>Нажмите «Сохранить» — входящие письма начнут появляться как лиды</li>
                 </ol>
               </CardContent>
             </Card>
           </div>
         </TabsContent>
+
+        {/* Templates Tab */}
+        <TabsContent value="templates" className="space-y-6">
+          <TemplatesManager siteId={siteId} />
+        </TabsContent>
       </Tabs>
     </div>
+  )
+}
+
+function TemplatesManager({ siteId }: { siteId: number }) {
+  const [templates, setTemplates] = useState<ApiTemplate[]>([])
+  const [loading, setLoading] = useState(true)
+  const [editing, setEditing] = useState<ApiTemplate | null>(null)
+  const [adding, setAdding] = useState(false)
+  const [draft, setDraft] = useState({ title: "", content: "" })
+  const [error, setError] = useState<string | null>(null)
+  const [submitting, setSubmitting] = useState(false)
+
+  const reload = () => {
+    setLoading(true)
+    fetchTemplates({ site: siteId })
+      .then((r) => setTemplates(r.results))
+      .catch(() => setTemplates([]))
+      .finally(() => setLoading(false))
+  }
+
+  useEffect(() => {
+    reload()
+  }, [siteId])
+
+  const startAdd = () => {
+    setEditing(null)
+    setDraft({ title: "", content: "" })
+    setError(null)
+    setAdding(true)
+  }
+
+  const startEdit = (t: ApiTemplate) => {
+    setAdding(false)
+    setEditing(t)
+    setDraft({ title: t.title, content: t.content })
+    setError(null)
+  }
+
+  const cancel = () => {
+    setAdding(false)
+    setEditing(null)
+    setError(null)
+  }
+
+  const save = async () => {
+    if (!draft.title.trim() || !draft.content.trim()) {
+      setError("Название и текст обязательны.")
+      return
+    }
+    setSubmitting(true)
+    setError(null)
+    try {
+      if (editing) {
+        await updateTemplate(editing.id, draft)
+      } else {
+        await createTemplate({ site: siteId, ...draft })
+      }
+      cancel()
+      reload()
+    } catch {
+      setError("Не удалось сохранить шаблон.")
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
+  const remove = async (id: number) => {
+    if (!confirm("Удалить шаблон?")) return
+    try {
+      await deleteTemplate(id)
+      reload()
+    } catch {
+      setError("Не удалось удалить шаблон.")
+    }
+  }
+
+  return (
+    <Card>
+      <CardHeader className="flex flex-row items-start justify-between gap-3 space-y-0">
+        <div>
+          <CardTitle className="flex items-center gap-2">
+            <Reply className="size-5" />
+            Шаблоны быстрых ответов
+          </CardTitle>
+          <CardDescription>
+            Менеджеры смогут вставлять эти ответы в один клик при работе с чатами этого сайта.
+          </CardDescription>
+        </div>
+        {!adding && !editing && (
+          <Button onClick={startAdd} size="sm" className="gap-2">
+            <Plus className="size-4" />
+            Добавить
+          </Button>
+        )}
+      </CardHeader>
+      <CardContent className="space-y-4">
+        {(adding || editing) && (
+          <div className="rounded-lg border bg-muted/30 p-4 space-y-3">
+            <div className="flex items-center justify-between">
+              <span className="text-sm font-medium">
+                {editing ? "Редактировать шаблон" : "Новый шаблон"}
+              </span>
+              <Button onClick={cancel} variant="ghost" size="icon" className="size-7">
+                <X className="size-4" />
+              </Button>
+            </div>
+            <div className="space-y-1.5">
+              <Label>Название</Label>
+              <Input
+                placeholder="Приветствие"
+                value={draft.title}
+                onChange={(e) => setDraft((d) => ({ ...d, title: e.target.value }))}
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label>Текст ответа</Label>
+              <Textarea
+                rows={4}
+                placeholder="Здравствуйте! Чем можем помочь?"
+                value={draft.content}
+                onChange={(e) => setDraft((d) => ({ ...d, content: e.target.value }))}
+              />
+            </div>
+            {error && (
+              <p className="text-xs text-destructive">{error}</p>
+            )}
+            <div className="flex justify-end gap-2">
+              <Button variant="outline" size="sm" onClick={cancel} disabled={submitting}>
+                Отмена
+              </Button>
+              <Button size="sm" onClick={save} disabled={submitting} className="gap-2">
+                <Save className="size-4" />
+                {submitting ? "Сохранение..." : "Сохранить"}
+              </Button>
+            </div>
+          </div>
+        )}
+
+        {loading ? (
+          <p className="text-sm text-muted-foreground py-6 text-center">Загрузка...</p>
+        ) : templates.length === 0 ? (
+          <p className="text-sm text-muted-foreground py-6 text-center">
+            Шаблонов пока нет. Добавьте первый — он появится в интерфейсе менеджера.
+          </p>
+        ) : (
+          <div className="divide-y rounded-lg border">
+            {templates.map((t) => (
+              <div key={t.id} className="flex items-start gap-3 p-4">
+                <div className="flex-1 min-w-0">
+                  <span className="font-medium text-sm">{t.title}</span>
+                  <p className="text-sm text-muted-foreground mt-1 line-clamp-2">{t.content}</p>
+                </div>
+                <div className="flex gap-1 shrink-0">
+                  <Button onClick={() => startEdit(t)} variant="ghost" size="icon" className="size-8">
+                    <Pencil className="size-4" />
+                  </Button>
+                  <Button onClick={() => remove(t.id)} variant="ghost" size="icon" className="size-8 text-destructive hover:text-destructive">
+                    <Trash2 className="size-4" />
+                  </Button>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </CardContent>
+    </Card>
   )
 }

@@ -14,7 +14,7 @@ import {
 } from "@dnd-kit/core"
 import { sortableKeyboardCoordinates } from "@dnd-kit/sortable"
 
-import type { Chat, ChatStatus } from "@/lib/mock-data"
+import type { Chat, ChatStatus } from "@/lib/chat-types"
 import { KanbanColumn } from "./kanban-column"
 import { ChatCard } from "./chat-card"
 

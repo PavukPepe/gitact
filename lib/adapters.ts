@@ -1,5 +1,5 @@
 import type { ApiChat, ApiMessage } from "./api"
-import type { Chat, ChatStatus, ChatSource, Message } from "./mock-data"
+import type { Chat, ChatStatus, ChatSource, Message } from "./chat-types"
 
 /**
  * Адаптирует ApiChat (backend) к Chat (frontend UI).
@@ -15,13 +15,12 @@ export function apiChatToChat(apiChat: ApiChat): Chat {
 
   const sourceMap: Record<string, ChatSource> = {
     widget: "website",
-    telegram: "telegram",
+    email: "email",
   }
 
   return {
     id: String(apiChat.id),
     clientName: apiChat.client_name || "Без имени",
-    clientTelegram: apiChat.telegram_username || undefined,
     source: sourceMap[apiChat.channel] || "website",
     status: statusMap[apiChat.status] || "new",
     lastMessage: apiChat.last_message?.content || "",
@@ -32,6 +31,7 @@ export function apiChatToChat(apiChat: ApiChat): Chat {
     assignedManagerName: apiChat.manager_name,
     siteName: apiChat.site_name,
     siteId: apiChat.site,
+    contactId: apiChat.contact,
   }
 }
 

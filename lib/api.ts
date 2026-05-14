@@ -117,6 +117,8 @@ export async function register(params: {
   password: string
   first_name: string
   organization_name?: string
+  plan?: string
+  consent_pdn: boolean
 }) {
   return apiFetch("/api/auth/register/", {
     method: "POST",
@@ -144,12 +146,25 @@ export async function changePassword(oldPassword: string, newPassword: string) {
 
 // --- Types ---
 
+export interface PlanLimits {
+  name: string
+  price: number
+  sites: number
+  managers: number
+  channels: string[]
+  analytics: boolean
+  email_channel: boolean
+  api_access: boolean
+}
+
 export interface UserProfile {
   id: number
   email: string
   first_name: string
   last_name: string
   role: "admin" | "rop" | "manager"
+  plan: "starter" | "business" | "enterprise"
+  plan_limits: PlanLimits
   organization_name: string
   created_at: string
 }
@@ -161,13 +176,28 @@ export interface PaginatedResponse<T> {
   results: T[]
 }
 
+export interface ApiContact {
+  id: number
+  site: number
+  name: string
+  email: string
+  phone: string
+  telegram_username: string
+  notes: string
+  chats_count: number
+  created_at: string
+  updated_at: string
+}
+
 export interface ApiChat {
   id: number
   client_name: string
   client_email: string
   telegram_username: string
+  contact: number | null
+  email_subject: string
   status: "new" | "in_progress" | "replied" | "closed"
-  channel: "widget" | "telegram"
+  channel: "widget" | "email"
   site: number
   site_name: string
   assigned_manager: number | null
@@ -209,6 +239,13 @@ export interface ApiSite {
   auto_reply_message: string
   telegram_bot_token: string
   telegram_referral_code: string
+  // Email channel
+  email_enabled: boolean
+  email_imap_host: string
+  email_imap_port: number
+  email_imap_user: string
+  email_smtp_host: string
+  email_smtp_port: number
   created_at: string
 }
 
@@ -218,7 +255,7 @@ export interface ApiManager extends UserProfile {
 
 export interface ApiTemplate {
   id: number
-  user: number | null
+  site: number
   title: string
   content: string
   hotkey: string
@@ -231,6 +268,7 @@ export interface StatsOverview {
   new_today: number
   closed_total: number
   avg_rating: number | null
+  avg_response_time: number | null
   by_channel: Record<string, number>
   by_status: Record<string, number>
 }
@@ -247,6 +285,20 @@ export interface ManagerStats {
   avg_rating: number | null
   ratings_count: number
   avg_response_time: number | null
+}
+
+export interface SiteStats {
+  id: number
+  name: string
+  url: string
+  total_chats: number
+  active_chats: number
+  closed_chats: number
+  avg_rating: number | null
+  ratings_count: number
+  avg_response_time: number | null
+  by_channel: Record<string, number>
+  by_status: Record<string, number>
 }
 
 // --- Chats API ---
@@ -285,11 +337,8 @@ export async function assignChat(id: number, managerId: number) {
   })
 }
 
-export async function mergeChats(chatId: number, targetChatId: number) {
-  return apiFetch(`/api/chats/${chatId}/merge/`, {
-    method: "POST",
-    body: JSON.stringify({ target_chat_id: targetChatId }),
-  })
+export async function deleteChat(id: number) {
+  return apiFetch(`/api/chats/${id}/`, { method: "DELETE" })
 }
 
 // --- Messages API ---
@@ -347,13 +396,6 @@ export async function fetchWidgetCode(siteId: number) {
   return apiFetch<{ embed_code: string }>(`/api/sites/${siteId}/widget-code/`)
 }
 
-export async function setupTelegram(siteId: number) {
-  return apiFetch<{ ok: boolean; webhook_url: string; bot_username: string; referral_link: string }>(
-    `/api/sites/${siteId}/setup-telegram/`,
-    { method: "POST" },
-  )
-}
-
 // --- Users/Managers API ---
 
 export async function fetchUsers() {
@@ -362,7 +404,6 @@ export async function fetchUsers() {
 
 export async function createUser(data: {
   email: string
-  password: string
   first_name: string
   last_name?: string
   role: string
@@ -391,17 +432,62 @@ export async function resetUserPassword(id: number, password: string) {
   })
 }
 
-// --- Templates API ---
-
-export async function fetchTemplates() {
-  return apiFetch<PaginatedResponse<ApiTemplate>>("/api/chats/templates/")
+export async function resendInvite(id: number) {
+  return apiFetch(`/api/users/${id}/resend-invite/`, { method: "POST" })
 }
 
-export async function createTemplate(data: { title: string; content: string; hotkey?: string }) {
+// --- Contacts API ---
+
+export async function fetchContacts(params?: Record<string, string>) {
+  const query = params ? "?" + new URLSearchParams(params).toString() : ""
+  return apiFetch<PaginatedResponse<ApiContact>>(`/api/contacts/${query}`)
+}
+
+export async function fetchContact(id: number) {
+  return apiFetch<ApiContact>(`/api/contacts/${id}/`)
+}
+
+export async function createContact(data: Partial<ApiContact>) {
+  return apiFetch<ApiContact>("/api/contacts/", {
+    method: "POST",
+    body: JSON.stringify(data),
+  })
+}
+
+export async function updateContact(id: number, data: Partial<ApiContact>) {
+  return apiFetch<ApiContact>(`/api/contacts/${id}/`, {
+    method: "PATCH",
+    body: JSON.stringify(data),
+  })
+}
+
+export async function deleteContact(id: number) {
+  return apiFetch(`/api/contacts/${id}/`, { method: "DELETE" })
+}
+
+// --- Templates API ---
+
+export async function fetchTemplates(params?: { site?: number }) {
+  const query = params?.site ? `?site=${params.site}` : ""
+  return apiFetch<PaginatedResponse<ApiTemplate>>(`/api/chats/templates/${query}`)
+}
+
+export async function createTemplate(data: { site: number; title: string; content: string; hotkey?: string }) {
   return apiFetch<ApiTemplate>("/api/chats/templates/", {
     method: "POST",
     body: JSON.stringify(data),
   })
+}
+
+export async function updateTemplate(id: number, data: Partial<{ title: string; content: string; hotkey: string }>) {
+  return apiFetch<ApiTemplate>(`/api/chats/templates/${id}/`, {
+    method: "PATCH",
+    body: JSON.stringify(data),
+  })
+}
+
+export async function deleteTemplate(id: number) {
+  return apiFetch(`/api/chats/templates/${id}/`, { method: "DELETE" })
 }
 
 // --- Stats API ---
@@ -414,6 +500,11 @@ export async function fetchStatsOverview(params?: Record<string, string>) {
 export async function fetchManagerStats(params?: Record<string, string>) {
   const query = params ? "?" + new URLSearchParams(params).toString() : ""
   return apiFetch<ManagerStats[]>(`/api/stats/managers/${query}`)
+}
+
+export async function fetchSiteStats(params?: Record<string, string>) {
+  const query = params ? "?" + new URLSearchParams(params).toString() : ""
+  return apiFetch<SiteStats[]>(`/api/stats/sites/${query}`)
 }
 
 export interface TimelineItem {
@@ -432,8 +523,9 @@ export interface RatingsStats {
   total_ratings: number
 }
 
-export async function fetchRatingsStats() {
-  return apiFetch<RatingsStats>("/api/stats/ratings/")
+export async function fetchRatingsStats(params?: Record<string, string>) {
+  const query = params ? "?" + new URLSearchParams(params).toString() : ""
+  return apiFetch<RatingsStats>(`/api/stats/ratings/${query}`)
 }
 
 // --- WebSocket ---

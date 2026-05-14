@@ -42,7 +42,7 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip"
-import { fetchSites, createSite, deleteSite, fetchWidgetCode, type ApiSite } from "@/lib/api"
+import { fetchSites, createSite, deleteSite, fetchWidgetCode, getProfile, type ApiSite } from "@/lib/api"
 
 export default function SitesPage() {
   useRoleGuard(["admin"])
@@ -54,11 +54,11 @@ export default function SitesPage() {
   const [addError, setAddError] = useState<string | null>(null)
   const [copiedId, setCopiedId] = useState<number | null>(null)
   const [deleteConfirmId, setDeleteConfirmId] = useState<number | null>(null)
-
-  const sitesLimit = 5
+  const [sitesLimit, setSitesLimit] = useState(1)
 
   useEffect(() => {
     loadSites()
+    getProfile().then(p => setSitesLimit(p.plan_limits?.sites ?? 1)).catch(() => {})
   }, [])
 
   async function loadSites() {
@@ -245,7 +245,7 @@ export default function SitesPage() {
                         </Button>
                       </TooltipTrigger>
                       <TooltipContent>
-                        <p>Настройки виджета и Telegram</p>
+                        <p>Настройки виджета и каналов</p>
                       </TooltipContent>
                     </Tooltip>
                   </TooltipProvider>

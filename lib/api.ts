@@ -1,5 +1,10 @@
 function getApiBase(): string {
-  if (process.env.NEXT_PUBLIC_API_URL) return process.env.NEXT_PUBLIC_API_URL
+  // Если переменная окружения задана (даже пустой строкой "") — используем её.
+  // Пустая строка = относительные URL, фронт пойдёт через nginx на тот же origin.
+  if (typeof process.env.NEXT_PUBLIC_API_URL === "string") {
+    return process.env.NEXT_PUBLIC_API_URL
+  }
+  // Иначе локальная разработка: бэкенд на 8000 на том же хосте, что и фронт
   if (typeof window !== "undefined") {
     return `http://${window.location.hostname}:8000`
   }
@@ -530,16 +535,23 @@ export async function fetchRatingsStats(params?: Record<string, string>) {
 
 // --- WebSocket ---
 
+function getWsBase(): string {
+  // Если API_BASE задан (например http://example.com) — конвертируем в ws://
+  if (API_BASE) return API_BASE.replace(/^http/, "ws")
+  // Иначе production через nginx с того же origin — строим ws-URL из window.location
+  if (typeof window === "undefined") return ""
+  const proto = window.location.protocol === "https:" ? "wss:" : "ws:"
+  return `${proto}//${window.location.host}`
+}
+
 export function connectChatWS(chatId: number): WebSocket | null {
   const token = getAccessToken()
   if (!token) return null
-  const wsBase = API_BASE.replace(/^http/, "ws")
-  return new WebSocket(`${wsBase}/ws/chat/${chatId}/?token=${token}`)
+  return new WebSocket(`${getWsBase()}/ws/chat/${chatId}/?token=${token}`)
 }
 
 export function connectNotificationsWS(): WebSocket | null {
   const token = getAccessToken()
   if (!token) return null
-  const wsBase = API_BASE.replace(/^http/, "ws")
-  return new WebSocket(`${wsBase}/ws/notifications/?token=${token}`)
+  return new WebSocket(`${getWsBase()}/ws/notifications/?token=${token}`)
 }

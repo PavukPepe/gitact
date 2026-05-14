@@ -99,6 +99,7 @@ export default function SiteSettingsPage() {
   useEffect(() => {
     if (isNaN(siteId)) return
     loadSite()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [siteId])
 
   async function loadSite() {
@@ -184,12 +185,12 @@ export default function SiteSettingsPage() {
           desktop,
           mobile,
           requireTelegram,
-        },
-        working_hours: workingHours,
+        } as Record<string, unknown>,
+        working_hours: workingHours as Record<string, unknown>,
         auto_reply_enabled: autoReplyEnabled,
         auto_reply_message: autoReplyMessage,
         telegram_bot_token: botToken,
-      } as any)
+      })
       setSaved(true)
       setTimeout(() => setSaved(false), 2000)
     } catch {
@@ -205,7 +206,7 @@ export default function SiteSettingsPage() {
     setConnectingBot(true)
     try {
       // Сначала сохраняем токен
-      await updateSite(siteId, { telegram_bot_token: botToken } as any)
+      await updateSite(siteId, { telegram_bot_token: botToken })
       // Затем регистрируем webhook
       const result = await setupTelegram(siteId)
       if (result.ok) {
@@ -213,8 +214,9 @@ export default function SiteSettingsPage() {
         setBotUsername(result.bot_username || "")
         setReferralLink(result.referral_link || "")
       }
-    } catch (err: any) {
-      const msg = err?.detail || "Ошибка подключения. Проверьте токен бота."
+    } catch (err: unknown) {
+      const e = err as { detail?: string }
+      const msg = e?.detail || "Ошибка подключения. Проверьте токен бота."
       setBotError(msg)
     } finally {
       setConnectingBot(false)
@@ -223,7 +225,7 @@ export default function SiteSettingsPage() {
 
   const handleDisconnectBot = async () => {
     try {
-      await updateSite(siteId, { telegram_bot_token: "" } as any)
+      await updateSite(siteId, { telegram_bot_token: "" })
       setBotToken("")
       setIsConnected(false)
       setBotUsername("")
@@ -280,14 +282,6 @@ export default function SiteSettingsPage() {
     document.addEventListener("mouseup", handleMouseUp)
   }
 
-  const getMobileButtonSize = () => {
-    switch (mobile.buttonSize) {
-      case "small": return "size-12 text-xs"
-      case "large": return "size-16 text-base"
-      default: return "size-14 text-sm"
-    }
-  }
-
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
@@ -318,7 +312,7 @@ export default function SiteSettingsPage() {
       </div>
 
       <Tabs defaultValue="widget" className="space-y-6">
-        <TabsList className="grid w-full grid-cols-2 lg:w-[400px]">
+        <TabsList className="grid w-full grid-cols-2 lg:w-100">
           <TabsTrigger value="widget" className="gap-2">
             <Palette className="size-4" />
             Виджет
@@ -778,7 +772,7 @@ export default function SiteSettingsPage() {
                     className={`relative bg-muted/50 rounded-lg overflow-hidden transition-all ${
                       previewMode === "desktop"
                         ? "w-full aspect-video"
-                        : "w-[320px] h-[560px] border-8 border-foreground/20 rounded-[2rem]"
+                        : "w-[320px] h-140 border-8 border-foreground/20 rounded-4xl"
                     }`}
                   >
                     {previewMode === "desktop" ? (

@@ -20,5 +20,6 @@ export function useRoleGuard(allowed: Role[]) {
     if (!allowed.includes(user.role as Role)) {
       router.replace("/chats")
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user, loading])
 }

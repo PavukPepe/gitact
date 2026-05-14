@@ -117,8 +117,9 @@ export default function ManagersPage() {
       await loadManagers()
       setNewManager({ first_name: "", last_name: "", email: "", password: "", role: "manager" })
       setDialogOpen(false)
-    } catch (err: any) {
-      const msg = err?.email?.[0] || err?.detail || "Ошибка при создании пользователя."
+    } catch (err: unknown) {
+      const e = err as { email?: string[]; detail?: string }
+      const msg = e?.email?.[0] || e?.detail || "Ошибка при создании пользователя."
       setCreateError(msg)
     } finally {
       setSubmitting(false)
@@ -154,8 +155,9 @@ export default function ManagersPage() {
       await resetUserPassword(resetPasswordId, resetPasswordValue)
       setResetPasswordId(null)
       setResetPasswordValue("")
-    } catch (err: any) {
-      setResetPasswordError(err?.password?.[0] || err?.detail || "Ошибка при сбросе пароля.")
+    } catch (err: unknown) {
+      const e = err as { password?: string[]; detail?: string }
+      setResetPasswordError(e?.password?.[0] || e?.detail || "Ошибка при сбросе пароля.")
     } finally {
       setSubmitting(false)
     }

@@ -76,7 +76,8 @@ export function ChatDetail({ chat, open, onClose, onChatUpdate, allChats = [], o
   const [mergeSearch, setMergeSearch] = useState("")
   const [mergeLoading, setMergeLoading] = useState(false)
   const wsRef = useRef<WebSocket | null>(null)
-  const scrollRef = useRef<HTMLDivElement>(null)
+  const messagesEndRef = useRef<HTMLDivElement>(null)
+  const messagesContainerRef = useRef<HTMLDivElement>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   // Sync manager state when chat changes
@@ -84,6 +85,7 @@ export function ChatDetail({ chat, open, onClose, onChatUpdate, allChats = [], o
     if (!chat) return
     setAssignedManagerId(chat.assignedManagerId ? String(chat.assignedManagerId) : "unassigned")
     setAssignedManagerName(chat.assignedManagerName ?? null)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [chat?.id])
 
   // Load managers list once
@@ -126,7 +128,7 @@ export function ChatDetail({ chat, open, onClose, onChatUpdate, allChats = [], o
           content: data.message.content,
           sender: data.message.sender_type === "client" ? "client" : "manager",
           timestamp: new Date(data.message.timestamp),
-          files: (data.message.files || []).map((f: any) => ({
+          files: (data.message.files || []).map((f: { id: number; url: string; filename: string; mime_type: string; file_size: number }) => ({
             id: String(f.id),
             url: f.url,
             filename: f.filename,
@@ -149,7 +151,10 @@ export function ChatDetail({ chat, open, onClose, onChatUpdate, allChats = [], o
 
   // Прокрутка вниз при новых сообщениях
   useEffect(() => {
-    scrollRef.current?.scrollIntoView({ behavior: "smooth" })
+    const container = messagesContainerRef.current
+    if (container) {
+      container.scrollTop = container.scrollHeight
+    }
   }, [messages])
 
   const handleSend = useCallback(async () => {
@@ -375,7 +380,7 @@ export function ChatDetail({ chat, open, onClose, onChatUpdate, allChats = [], o
         </div>
 
         {/* Messages */}
-        <ScrollArea className="flex-1 p-4">
+        <div ref={messagesContainerRef} className="flex-1 overflow-y-auto p-4">
           <div className="space-y-4">
             {messages.map((msg) => (
               <div
@@ -414,9 +419,9 @@ export function ChatDetail({ chat, open, onClose, onChatUpdate, allChats = [], o
                 </div>
               </div>
             ))}
-            <div ref={scrollRef} />
+            <div ref={messagesEndRef} />
           </div>
-        </ScrollArea>
+        </div>
 
         <Separator />
 
@@ -426,6 +431,7 @@ export function ChatDetail({ chat, open, onClose, onChatUpdate, allChats = [], o
             {pendingFiles.map((file, index) => (
               <div key={index} className="relative group">
                 {file.type.startsWith("image/") ? (
+                  // eslint-disable-next-line @next/next/no-img-element
                   <img
                     src={URL.createObjectURL(file)}
                     alt={file.name}
@@ -565,6 +571,7 @@ function FileAttachment({ file, isClient }: { file: MessageFile; isClient: boole
   if (isImage) {
     return (
       <a href={url} target="_blank" rel="noopener noreferrer">
+        {/* eslint-disable-next-line @next/next/no-img-element */}
         <img
           src={url}
           alt={file.filename}

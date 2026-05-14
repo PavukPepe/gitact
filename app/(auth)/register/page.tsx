@@ -30,8 +30,9 @@ export default function RegisterPage() {
       await register(form)
       await login(form.email, form.password)
       router.push("/chats")
-    } catch (err: any) {
-      const msg = err?.email?.[0] || err?.password?.[0] || err?.detail || "Ошибка регистрации"
+    } catch (err: unknown) {
+      const e = err as { email?: string[]; password?: string[]; detail?: string }
+      const msg = e?.email?.[0] || e?.password?.[0] || e?.detail || "Ошибка регистрации"
       setError(msg)
     } finally {
       setLoading(false)

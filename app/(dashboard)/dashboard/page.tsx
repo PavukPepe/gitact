@@ -84,8 +84,7 @@ export default function DashboardPage() {
 
       const date = new Date().toLocaleDateString("ru-RU").replace(/\./g, "-")
       await captureElementToPDF(reportRef.current, `statistics-${date}.pdf`)
-    } catch (err) {
-      console.error("PDF export error:", err)
+    } catch {
       setExportError("Не удалось создать PDF. Проверьте консоль.")
     } finally {
       setExporting(false)

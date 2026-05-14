@@ -50,12 +50,12 @@ async function refreshAccessToken(): Promise<string | null> {
   }
 }
 
-export async function apiFetch<T = any>(
+export async function apiFetch<T = unknown>(
   path: string,
   options: RequestInit = {}
 ): Promise<T> {
   const url = `${API_BASE}${path}`
-  let token = getAccessToken()
+  const token = getAccessToken()
 
   const headers: Record<string, string> = {
     ...(options.headers as Record<string, string>),
@@ -203,8 +203,8 @@ export interface ApiSite {
   name: string
   url: string
   site_uuid: string
-  widget_settings: Record<string, any>
-  working_hours: Record<string, any>
+  widget_settings: Record<string, unknown>
+  working_hours: Record<string, unknown>
   auto_reply_enabled: boolean
   auto_reply_message: string
   telegram_bot_token: string

@@ -51,6 +51,7 @@ export default function SitesPage() {
   const [dialogOpen, setDialogOpen] = useState(false)
   const [submitting, setSubmitting] = useState(false)
   const [newSite, setNewSite] = useState({ name: "", url: "" })
+  const [addError, setAddError] = useState<string | null>(null)
   const [copiedId, setCopiedId] = useState<number | null>(null)
   const [deleteConfirmId, setDeleteConfirmId] = useState<number | null>(null)
 
@@ -73,14 +74,22 @@ export default function SitesPage() {
 
   const handleAddSite = async () => {
     if (!newSite.name || !newSite.url) return
+    setAddError(null)
+    let url = newSite.url.trim()
+    if (url && !/^https?:\/\//i.test(url)) {
+      url = "https://" + url
+    }
     setSubmitting(true)
     try {
-      await createSite({ name: newSite.name, url: newSite.url })
+      await createSite({ name: newSite.name, url })
       await loadSites()
       setNewSite({ name: "", url: "" })
       setDialogOpen(false)
-    } catch {
-      // ошибка создания
+    } catch (err: unknown) {
+      const e = err as Record<string, unknown>
+      if (e.url) setAddError(String((e.url as string[])[0]))
+      else if (e.detail) setAddError(String(e.detail))
+      else setAddError("Не удалось добавить сайт")
     } finally {
       setSubmitting(false)
     }
@@ -133,7 +142,7 @@ export default function SitesPage() {
             Управление подключёнными сайтами
           </p>
         </div>
-        <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+        <Dialog open={dialogOpen} onOpenChange={(open) => { setDialogOpen(open); if (!open) setAddError(null) }}>
           <DialogTrigger asChild>
             <Button disabled={sites.length >= sitesLimit}>
               <Plus className="size-4 mr-2" />
@@ -162,10 +171,13 @@ export default function SitesPage() {
                 <Input
                   id="siteUrl"
                   value={newSite.url}
-                  onChange={(e) => setNewSite({ ...newSite, url: e.target.value })}
+                  onChange={(e) => { setNewSite({ ...newSite, url: e.target.value }); setAddError(null) }}
                   placeholder="https://example.com"
                 />
               </div>
+              {addError && (
+                <p className="text-sm text-destructive">{addError}</p>
+              )}
             </div>
             <DialogFooter>
               <Button variant="outline" onClick={() => setDialogOpen(false)}>

@@ -25,8 +25,9 @@ export default function LoginPage() {
     try {
       await login(email, password)
       router.push("/chats")
-    } catch (err: any) {
-      setError(err?.detail || "Неверный email или пароль")
+    } catch (err: unknown) {
+      const e = err as { detail?: string }
+      setError(e?.detail || "Неверный email или пароль")
     } finally {
       setLoading(false)
     }

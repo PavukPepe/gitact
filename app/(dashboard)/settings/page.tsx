@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { Save, CreditCard, Building2, Clock, Mail, User, Lock } from "lucide-react"
+import { Save, CreditCard, Building2, Mail, User, Lock } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -18,13 +18,6 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog"
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select"
 import { getProfile, updateProfile, changePassword, fetchUsers, fetchSites, type UserProfile } from "@/lib/api"
 
 export default function SettingsPage() {
